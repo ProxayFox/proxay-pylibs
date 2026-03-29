@@ -1,9 +1,15 @@
 """SSL module variable pools — conditional on $scheme == 'https'."""
 
+import random
+
 from ..base import PoolMeta, PoolType, register_pool
+from ..composite import CompositePool
 from ..weighted import WeightedPool
 from ..conditional import ConditionalPool
 from ..numeric import NumericPool, NumericDistribution
+
+
+_HEX_DIGITS = "0123456789abcdef"
 
 
 # ─── Helper: wrap in conditional ──────────────────────────────────
@@ -15,6 +21,11 @@ def _ssl_conditional(meta: PoolMeta, inner) -> ConditionalPool:
         condition_values={"https"},
         default="-",
     )
+
+
+def _build_ssl_session_id(ctx: dict[str, str]) -> str:
+    """Generate a synthetic hexadecimal TLS session id."""
+    return "".join(random.choices(_HEX_DIGITS, k=32))
 
 
 # ─── $ssl_protocol ────────────────────────────────────────────────
@@ -107,6 +118,30 @@ register_pool(
         WeightedPool(
             meta=PoolMeta("$ssl_session_reused", "", "", [], PoolType.WEIGHTED),
             choices={"r": 0.60, ".": 0.40},
+        ),
+    )
+)
+
+# ─── $ssl_session_id ──────────────────────────────────────────────
+register_pool(
+    _ssl_conditional(
+        PoolMeta(
+            nginx_variable="$ssl_session_id",
+            description="Hexadecimal SSL session identifier",
+            module="ngx_http_ssl_module",
+            contexts=["http", "server"],
+            pool_type=PoolType.CONDITIONAL,
+            conditional_on="$scheme",
+        ),
+        CompositePool(
+            meta=PoolMeta(
+                "$ssl_session_id",
+                "",
+                "",
+                [],
+                PoolType.COMPOSITE,
+            ),
+            builder=_build_ssl_session_id,
         ),
     )
 )

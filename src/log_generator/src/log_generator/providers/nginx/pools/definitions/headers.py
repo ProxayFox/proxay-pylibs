@@ -1,7 +1,22 @@
 """HTTP header variable pools: $http_user_agent, $http_referer, etc."""
 
+import random
+
 from ..base import PoolMeta, PoolType, register_pool
+from ..composite import CompositePool
 from ..weighted import WeightedPool
+
+
+def _build_http_x_forwarded_for(ctx: dict[str, str]) -> str:
+    """Build an X-Forwarded-For chain rooted in the client address."""
+    remote_addr = ctx.get("$remote_addr", "127.0.0.1")
+    forwarded_for_values = [
+        remote_addr,
+        f"{remote_addr}, 10.0.0.10",
+        f"{remote_addr}, 10.0.0.10, 172.16.0.20",
+    ]
+    return random.choices(forwarded_for_values, weights=[0.7, 0.2, 0.1], k=1)[0]
+
 
 # ─── $http_user_agent ─────────────────────────────────────────────
 register_pool(
@@ -153,7 +168,18 @@ register_pool(
 )
 
 # ─── $http_x_forwarded_for ────────────────────────────────────────
-# (Typically generated dynamically from $remote_addr — see composite)
+register_pool(
+    CompositePool(
+        meta=PoolMeta(
+            nginx_variable="$http_x_forwarded_for",
+            description="X-Forwarded-For header chain rooted in the client IP",
+            module="ngx_http_core_module",
+            contexts=["http", "server", "location"],
+            pool_type=PoolType.COMPOSITE,
+        ),
+        builder=_build_http_x_forwarded_for,
+    )
+)
 
 # ─── $http_x_forwarded_proto ──────────────────────────────────────
 register_pool(

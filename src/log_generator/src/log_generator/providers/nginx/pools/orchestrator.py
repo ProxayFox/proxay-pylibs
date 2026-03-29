@@ -2,7 +2,8 @@
 
 from datetime import datetime, timezone
 from typing import Any
-from .base import all_pools, get_pool
+
+from .base import all_pools
 
 
 # Define generation order (dependency-aware)
@@ -47,6 +48,7 @@ GENERATION_ORDER = [
     "$ssl_cipher",
     "$ssl_curves",
     "$ssl_session_reused",
+    "$ssl_session_id",
     "$ssl_early_data",
     "$ssl_server_name",
     # 6. Upstream
