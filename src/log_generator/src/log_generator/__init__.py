@@ -4,8 +4,8 @@ The root package exposes provider namespaces so future providers can be added
 without forcing provider-specific helpers into the top-level import surface.
 """
 
-from log_generator import providers
+from log_generator import core, providers
 
 nginx = providers.nginx
 
-__all__ = ["nginx", "providers"]
+__all__ = ["core", "nginx", "providers"]

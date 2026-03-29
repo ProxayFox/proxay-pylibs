@@ -11,11 +11,14 @@ The current shipped slice provides a pool-driven NGINX generator that can:
 - render shipped format strings into complete log lines,
 - support composite and conditional values such as request lines, forwarded-for
     chains, and TLS fields,
-- render time fields from a fixed timestamp for deterministic tests.
+- render time fields from a fixed timestamp for deterministic tests,
+- expose a thin provider registry and engine layer for future providers,
+- generate lines from a test-backed CLI.
 
 The root package now exposes provider namespaces rather than provider-specific
 helpers directly. Today that means:
 
+- `log_generator.core`
 - `log_generator.nginx`
 - `log_generator.providers.nginx`
 
@@ -23,12 +26,23 @@ Within the NGINX provider namespace, the shipped surface includes:
 
 - `generate_log_entry`
 - `format_log_line`
+- `NginxProvider`
+- `NGINX_PROVIDER`
+- `PRESETS`
 - format constants:
   - `DEFAULT_FORMAT`
   - `JSON_FORMAT`
   - `EXAMPLE_FORMAT`
   - `PRODUCTION_FORMAT`
   - `SHIPPED_FORMATS`
+
+Within `log_generator.core`, the shipped surface includes:
+
+- `BaseProvider`
+- `LogEngine`
+- `get_provider`
+- `all_providers`
+- `provider_names`
 
 ## Example usage
 
@@ -69,6 +83,33 @@ print(entry["$request_uri"])
 print(entry["$request"])
 ```
 
+You can also generate rendered lines through the thin engine layer.
+
+```python
+from log_generator.core import LogEngine
+
+engine = LogEngine.from_provider("nginx")
+print(engine.generate_line(preset="production"))
+```
+
+## CLI usage
+
+The package now ships a Click-based CLI through the `log_generator` command.
+
+```text
+uv run log_generator providers
+uv run log_generator generate -n 5
+uv run log_generator generate -p production -n 2
+uv run log_generator generate -f '$remote_addr [$time_iso8601] "$request" $status'
+uv run log_generator generate -p json -n 10 -o /tmp/fake_nginx.log
+```
+
+Current CLI commands:
+
+- `providers` — list registered providers and their shipped presets
+- `sources` — backward-compatible alias for `providers`
+- `generate` — emit lines for a preset or custom format
+
 ## Shipped formats
 
 The package currently treats these as shipped, test-backed formats:
@@ -87,17 +128,20 @@ Those shipped formats are validated in pytest to ensure:
 
 These items are intentionally not shipped yet:
 
-- CLI entry point
 - YAML configuration
 - formal parser for arbitrary `log_format` strings
-- multi-provider architecture beyond NGINX
+- dynamic plugin discovery for providers
+- additional provider implementations beyond NGINX
 
 ## Development notes
 
 - Runtime package code lives in `src/log_generator/`.
 - Package-specific tests live in `tests/`.
-- Focused validation currently uses package-local pytest files rather than a
-    broad repo-wide acceptance gate.
+- Focused validation currently uses package-local pytest files such as:
+  - `tests/test_cli.py`
+  - `tests/core/test_registry.py`
+  - `tests/core/test_engine.py`
+  - `tests/providers/nginx/test_nginx_shipping_rules.py`
 
 ## Inspirations and goals
 
