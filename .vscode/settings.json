@@ -34,7 +34,9 @@
     "log": false,
   },
   "editor.formatOnSave": true,
-  "editor.defaultFormatter": "ms-python.black-formatter",
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter"
+  },
   "markdownlint.enabled": true,
   "markdownlint.run": "onType",
   "markdownlint.config": {

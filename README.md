@@ -22,6 +22,15 @@ Arrow-backed ingestion containers.
 - `MissingFieldPolicy`
 - `CoercionPolicy`
 
+### `log-generator`
+
+The `log-generator` workspace package lives in `src/log_generator` and is
+intended for synthetic log generation from reusable, format-driven templates.
+
+- template-based field generation
+- reusable generators for structured log emission
+- built-in presets for formats such as NGINX access logs
+
 ## Repository layout
 
 - `pyproject.toml` - shared workspace and test configuration

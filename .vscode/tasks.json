@@ -11,7 +11,7 @@
 				"check",
 				"--respect-ignore",
 				"--exclude",
-				".github/prompts/"
+				".github/prompts/**"
 
 			],
 			"problemMatcher": [],

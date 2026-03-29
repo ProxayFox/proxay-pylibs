@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "log-generator"
+version = "0.1.0"
+description = "A flexible synthetic log generator. Parse real log formats, forge fake logs."
+authors = [
+    { name = "ProxayFox", email = "28168887+ProxayFox@users.noreply.github.com" },
+]
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+dependencies = ["click>=8.3.1"]
+
+[project.scripts]
+log_generator = "log_generator.cli:main"
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source = ["src/log_generator"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/log_generator"]
