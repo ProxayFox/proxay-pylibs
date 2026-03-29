@@ -1,0 +1,16 @@
+# {{ distribution_name }}
+
+`{{ distribution_name }}` is a workspace package in `proxay-pylibs`.
+
+## Purpose
+
+{{ description }}
+
+## Public API
+
+Document the main public classes, functions, or modules here.
+
+## Development notes
+
+- Runtime package code lives in `src/{{ import_package }}/`.
+- Package-specific tests live in `tests/`.

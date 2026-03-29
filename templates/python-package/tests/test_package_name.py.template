@@ -1,0 +1,9 @@
+"""Smoke tests for {{ import_package }}."""
+
+from __future__ import annotations
+
+
+def test_package_imports() -> None:
+    module = __import__("{{ import_package }}")
+
+    assert module is not None
