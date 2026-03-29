@@ -8,7 +8,10 @@ from .base import BaseProvider
 
 
 _PROVIDERS: dict[str, BaseProvider] = {}
-_BUILTIN_PROVIDER_MODULES: tuple[str, ...] = ("log_generator.providers.nginx.provider",)
+_BUILTIN_PROVIDER_MODULES: tuple[str, ...] = (
+    "log_generator.providers.basic.provider",
+    "log_generator.providers.nginx.provider",
+)
 _BUILTINS_LOADED = False
 
 

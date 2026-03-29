@@ -18,9 +18,17 @@ The current shipped slice provides a pool-driven NGINX generator that can:
 The root package now exposes provider namespaces rather than provider-specific
 helpers directly. Today that means:
 
+- `log_generator.basic`
 - `log_generator.core`
 - `log_generator.nginx`
+- `log_generator.providers.basic`
 - `log_generator.providers.nginx`
+
+The current shipped providers are:
+
+- `basic` — a lightweight application-log provider used to validate the
+  multi-provider abstraction and CLI
+- `nginx` — the pool-driven NGINX access-log provider
 
 Within the NGINX provider namespace, the shipped surface includes:
 
@@ -100,7 +108,9 @@ The package now ships a Click-based CLI through the `log_generator` command.
 ```text
 uv run log_generator providers
 uv run log_generator presets
+uv run log_generator presets --provider basic
 uv run log_generator generate -n 5
+uv run log_generator generate --provider basic -p kv -n 2
 uv run log_generator generate -p production -n 2
 uv run log_generator generate -f '$remote_addr [$time_iso8601] "$request" $status'
 uv run log_generator generate -p json -n 10 -o /tmp/fake_nginx.log

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from log_generator.core import all_providers, get_provider, provider_names
-from log_generator.providers import nginx
+from log_generator.providers import basic, nginx
 from tests.providers.nginx._nginx_test_helpers import (
     FIXED_TIMESTAMP,
     assert_no_unresolved_placeholders,
@@ -21,6 +21,17 @@ def test_nginx_provider_is_registered() -> None:
     assert provider.description
     assert provider.default_preset == "default"
     assert provider.available_presets() == ("default", "json", "example", "production")
+
+
+@pytest.mark.unit
+def test_basic_provider_is_registered() -> None:
+    provider = get_provider("basic")
+
+    assert provider is basic.BASIC_PROVIDER
+    assert provider.name == "basic"
+    assert provider.description
+    assert provider.default_preset == "default"
+    assert provider.available_presets() == ("default", "kv", "json")
 
 
 @pytest.mark.unit
@@ -40,6 +51,7 @@ def test_registered_provider_exposes_preset_details() -> None:
 def test_registry_lists_builtin_provider_names() -> None:
     providers = all_providers()
 
+    assert "basic" in providers
     assert "nginx" in providers
     assert provider_names() == tuple(providers)
 
@@ -52,3 +64,13 @@ def test_registered_provider_can_generate_a_shipped_line() -> None:
 
     assert_no_unresolved_placeholders(rendered)
     assert '"' in rendered
+
+
+@pytest.mark.unit
+def test_basic_provider_can_generate_a_shipped_line() -> None:
+    provider = get_provider("basic")
+
+    rendered = provider.generate_line(timestamp=FIXED_TIMESTAMP, preset="json")
+
+    assert "{timestamp}" not in rendered
+    assert '"level":' in rendered

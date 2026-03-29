@@ -6,6 +6,7 @@ without forcing provider-specific helpers into the top-level import surface.
 
 from log_generator import core, providers
 
+basic = providers.basic
 nginx = providers.nginx
 
-__all__ = ["core", "nginx", "providers"]
+__all__ = ["basic", "core", "nginx", "providers"]

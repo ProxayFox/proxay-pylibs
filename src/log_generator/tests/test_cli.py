@@ -16,7 +16,9 @@ def test_providers_command_lists_nginx_and_presets() -> None:
     result = CliRunner().invoke(main, ["providers"])
 
     assert result.exit_code == 0
+    assert "basic:" in result.output
     assert "nginx:" in result.output
+    assert "Simple application-log provider" in result.output
     assert "Synthetic NGINX access-log generation" in result.output
     assert "default" in result.output
     assert "production" in result.output
@@ -37,6 +39,16 @@ def test_presets_command_lists_provider_presets_and_default_marker() -> None:
     assert result.exit_code == 0
     assert "default (default): Default Format Example" in result.output
     assert "production: Production Format Example" in result.output
+
+
+@pytest.mark.unit
+def test_presets_command_lists_basic_provider_presets() -> None:
+    result = CliRunner().invoke(main, ["presets", "--provider", "basic"])
+
+    assert result.exit_code == 0
+    assert "default (default): Default App Format" in result.output
+    assert "kv: Key Value App Format" in result.output
+    assert "json: JSON App Format" in result.output
 
 
 @pytest.mark.unit
@@ -113,6 +125,20 @@ def test_generate_command_rejects_unknown_provider() -> None:
 
     assert result.exit_code != 0
     assert "Unknown provider" in result.output
+
+
+@pytest.mark.unit
+def test_generate_command_supports_basic_provider() -> None:
+    result = CliRunner().invoke(
+        main, ["generate", "--provider", "basic", "--preset", "kv"]
+    )
+
+    rendered = result.output.strip()
+
+    assert result.exit_code == 0
+    assert "timestamp=" in rendered
+    assert "service=" in rendered
+    assert "request_id=req-" in rendered
 
 
 @pytest.mark.unit

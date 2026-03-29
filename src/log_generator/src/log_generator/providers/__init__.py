@@ -1,5 +1,5 @@
 """Provider packages for ``log_generator``."""
 
-from . import nginx
+from . import basic, nginx
 
-__all__ = ["nginx"]
+__all__ = ["basic", "nginx"]
