@@ -2,20 +2,17 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import re
 
 import pytest
 
+from ._nginx_test_helpers import FIXED_TIMESTAMP, UNRESOLVED_VARIABLE_PATTERN
 from log_generator.providers.nginx.examples.main import EXAMPLE_FORMAT, SHIPPED_FORMATS
 from log_generator.providers.nginx.pools import (
     all_pools,
     format_log_line,
     generate_log_entry,
 )
-
-
-UNRESOLVED_VARIABLE_PATTERN = re.compile(r"\$[A-Za-z_][A-Za-z0-9_]*")
 
 
 @pytest.mark.unit
@@ -41,9 +38,7 @@ def test_ssl_session_id_respects_https_condition() -> None:
 
 @pytest.mark.unit
 def test_production_format_renders_without_unresolved_placeholders() -> None:
-    entry = generate_log_entry(
-        timestamp=datetime(2026, 3, 29, 7, 31, 26, tzinfo=timezone.utc)
-    )
+    entry = generate_log_entry(timestamp=FIXED_TIMESTAMP)
 
     rendered = format_log_line(entry, EXAMPLE_FORMAT)
 
@@ -58,9 +53,7 @@ def test_all_shipped_formats_render_without_unresolved_placeholders(
     format_name: str,
     log_format: str,
 ) -> None:
-    entry = generate_log_entry(
-        timestamp=datetime(2026, 3, 29, 7, 31, 26, tzinfo=timezone.utc)
-    )
+    entry = generate_log_entry(timestamp=FIXED_TIMESTAMP)
 
     rendered = format_log_line(entry, log_format)
 
