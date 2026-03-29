@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "log-generator"
+version = "0.1.0"
+description = "Configurable synthetic log generator with format-driven templates."
+authors = [{ name = "ProxayFox", email = "28168887+ProxayFox@users.noreply.github.com" }]
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+dependencies = [
+    "faker>=37.1.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/log_generator"]
