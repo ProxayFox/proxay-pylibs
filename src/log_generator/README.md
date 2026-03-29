@@ -154,8 +154,9 @@ These items are intentionally not shipped yet:
   focused package-local verification with the package's stricter coverage gate,
   run:
 
-```text
-uv run pytest src/log_generator/tests --cov=src/log_generator/src/log_generator --cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=100
+```Bash
+uv run pytest src/log_generator/tests --cov=src/log_generator/src/log_generator \
+--cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=100
 ```
 
 - That command keeps the shared pytest defaults while enforcing the current
