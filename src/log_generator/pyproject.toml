@@ -17,5 +17,40 @@ dependencies = ["click>=8.3.1"]
 [project.scripts]
 log_generator = "log_generator.cli:main"
 
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+    "--color=yes",
+    "--cov=src/log_generator",
+    "--cov-branch",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-fail-under=100",
+]
+markers = [
+    "unit: marks tests as unit tests (fast, isolated)",
+    "integration: marks tests as integration tests (slower, multi-component)",
+    "performance: marks tests as performance benchmarks (resource-intensive)",
+    "slow: marks tests as slow-running (excluded by default)",
+]
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source = ["src/log_generator"]
+
+[tool.coverage.report]
+fail_under = 100
+show_missing = true
+skip_covered = true
+omit = ["*/tests/*", "*/__pycache__/*"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/log_generator"]

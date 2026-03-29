@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from io import StringIO
+from os import PathLike
 
 import pytest
 
-from log_generator.core import LogEngine
+from log_generator.core import LogEngine, get_provider
 from log_generator.providers.nginx import DEFAULT_FORMAT, JSON_FORMAT
 from tests.providers.nginx._nginx_test_helpers import (
     FIXED_TIMESTAMP,
@@ -23,6 +24,26 @@ def test_engine_can_generate_line_from_named_provider() -> None:
 
     assert_no_unresolved_placeholders(rendered)
     assert_stable_shape(DEFAULT_FORMAT, rendered)
+
+
+class _SyntheticPath(PathLike[str]):
+    def __init__(self, value: str) -> None:
+        self.value = value
+
+    def __fspath__(self) -> str:
+        return self.value
+
+
+@pytest.mark.unit
+def test_engine_can_generate_entry_from_provider_instance() -> None:
+    provider = get_provider("basic")
+    engine = LogEngine.from_provider(provider)
+
+    entry = engine.generate_entry(
+        variables=["timestamp", "level"], timestamp=FIXED_TIMESTAMP
+    )
+
+    assert set(entry) == {"timestamp", "level"}
 
 
 @pytest.mark.unit
@@ -62,6 +83,38 @@ def test_engine_write_supports_file_paths(tmp_path) -> None:
     rendered_lines = output_path.read_text(encoding="utf-8").splitlines()
     assert len(rendered_lines) == 2
     assert all(rendered_lines)
+
+
+@pytest.mark.unit
+def test_engine_write_supports_string_paths(tmp_path) -> None:
+    engine = LogEngine.from_provider("basic")
+    output_path = str(tmp_path / "synthetic-basic-string.log")
+
+    written = engine.write(1, output_path, preset="default", timestamp=FIXED_TIMESTAMP)
+
+    assert written == 1
+    rendered_lines = (
+        (tmp_path / "synthetic-basic-string.log")
+        .read_text(encoding="utf-8")
+        .splitlines()
+    )
+    assert len(rendered_lines) == 1
+    assert rendered_lines[0]
+
+
+@pytest.mark.unit
+def test_engine_write_supports_generic_pathlike_objects(tmp_path) -> None:
+    engine = LogEngine.from_provider("basic")
+    output_path = _SyntheticPath(str(tmp_path / "synthetic-basic.log"))
+
+    written = engine.write(1, output_path, preset="json", timestamp=FIXED_TIMESTAMP)
+
+    assert written == 1
+    rendered_lines = (
+        (tmp_path / "synthetic-basic.log").read_text(encoding="utf-8").splitlines()
+    )
+    assert len(rendered_lines) == 1
+    assert rendered_lines[0].startswith("{")
 
 
 @pytest.mark.unit

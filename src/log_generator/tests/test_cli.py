@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
+import runpy
 
 from click.testing import CliRunner
 import pytest
 
+import log_generator.cli as cli_module
 from log_generator.cli import main
 from tests.providers.nginx._nginx_test_helpers import UNRESOLVED_VARIABLE_PATTERN
 
@@ -30,6 +32,23 @@ def test_sources_alias_lists_registered_providers() -> None:
 
     assert result.exit_code == 0
     assert "nginx:" in result.output
+
+
+@pytest.mark.unit
+def test_providers_command_handles_empty_provider_description(monkeypatch) -> None:
+    class _Provider:
+        description = ""
+
+        @staticmethod
+        def available_presets() -> tuple[str, ...]:
+            return ("default",)
+
+    monkeypatch.setattr(cli_module, "all_providers", lambda: {"dummy": _Provider()})
+
+    result = CliRunner().invoke(main, ["providers"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == "dummy: default"
 
 
 @pytest.mark.unit
@@ -147,3 +166,18 @@ def test_presets_command_rejects_unknown_provider() -> None:
 
     assert result.exit_code != 0
     assert "Unknown provider" in result.output
+
+
+@pytest.mark.unit
+def test_cli_module_main_entrypoint_runs_group(monkeypatch) -> None:
+    called = {"count": 0}
+
+    def fake_main(*args, **kwargs):
+        called["count"] += 1
+        return 0
+
+    monkeypatch.setattr("click.core.Command.main", fake_main)
+
+    runpy.run_module("log_generator.cli", run_name="__main__")
+
+    assert called["count"] == 1

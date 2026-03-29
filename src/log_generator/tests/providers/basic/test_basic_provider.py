@@ -60,3 +60,18 @@ def test_basic_provider_public_exports_are_available() -> None:
     assert basic.JSON_FORMAT
     assert basic.PRESETS
     assert basic.PRESET_DETAILS
+    assert basic.SHIPPED_FORMATS
+
+
+@pytest.mark.unit
+def test_basic_provider_exposes_shipped_formats_property() -> None:
+    assert get_provider("basic").shipped_formats == basic.SHIPPED_FORMATS
+
+
+@pytest.mark.unit
+def test_basic_provider_format_line_preserves_unknown_placeholders() -> None:
+    rendered = get_provider("basic").format_line(
+        {"timestamp": "t"}, "{timestamp} {missing}"
+    )
+
+    assert rendered == "t {missing}"

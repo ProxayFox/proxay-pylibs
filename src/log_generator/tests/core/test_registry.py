@@ -4,12 +4,37 @@ from __future__ import annotations
 
 import pytest
 
-from log_generator.core import all_providers, get_provider, provider_names
+from log_generator.core import (
+    all_providers,
+    get_provider,
+    provider_names,
+    register_provider,
+)
+from log_generator.core.base import BaseProvider
 from log_generator.providers import basic, nginx
 from tests.providers.nginx._nginx_test_helpers import (
     FIXED_TIMESTAMP,
     assert_no_unresolved_placeholders,
 )
+
+
+class _RegistryTestProvider(BaseProvider):
+    name = "registry-test"
+    default_preset = "default"
+
+    @property
+    def presets(self) -> dict[str, str]:
+        return {"default": "value={value}"}
+
+    @property
+    def shipped_formats(self) -> tuple[tuple[str, str], ...]:
+        return (("Registry Test Format", "value={value}"),)
+
+    def generate_entry(self, variables=None, timestamp=None) -> dict[str, str]:
+        return {"value": "ok"}
+
+    def format_line(self, entry: dict[str, str], log_format: str) -> str:
+        return log_format.format_map(entry)
 
 
 @pytest.mark.unit
@@ -74,3 +99,27 @@ def test_basic_provider_can_generate_a_shipped_line() -> None:
 
     assert "{timestamp}" not in rendered
     assert '"level":' in rendered
+
+
+@pytest.mark.unit
+def test_get_provider_rejects_unknown_provider() -> None:
+    with pytest.raises(KeyError, match="Unknown provider"):
+        get_provider("does-not-exist")
+
+
+@pytest.mark.unit
+def test_register_provider_rejects_duplicate_names() -> None:
+    provider = _RegistryTestProvider()
+    provider.name = "basic"
+
+    with pytest.raises(ValueError, match="already registered"):
+        register_provider(provider)
+
+
+@pytest.mark.unit
+def test_register_provider_rejects_empty_names() -> None:
+    provider = _RegistryTestProvider()
+    provider.name = "  "
+
+    with pytest.raises(ValueError, match="must not be empty"):
+        register_provider(provider)
