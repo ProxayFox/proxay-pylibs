@@ -54,13 +54,31 @@ addopts = [
     "--tb=short",
     "--strict-markers",
     "--disable-warnings",
-    "--color=yes"
+    "--color=yes",
+    "--cov=src/http_to_arrow/src/http_to_arrow",
+    "--cov-branch",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-fail-under=90"
 ]
 markers = [
     "unit: marks tests as unit tests (fast, isolated)",
     "integration: marks tests as integration tests (slower, multi-component)",
     "performance: marks tests as performance benchmarks (resource-intensive)",
     "slow: marks tests as slow-running (excluded by default)"
+]
+
+[tool.coverage.run]
+branch = true
+relative_files = true
+source = ["src/http_to_arrow/src/http_to_arrow"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
 ]
 
 [tool.deptry]
