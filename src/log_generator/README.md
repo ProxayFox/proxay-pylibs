@@ -150,16 +150,17 @@ These items are intentionally not shipped yet:
 
 - Runtime package code lives in `src/log_generator/`.
 - Package-specific tests live in `tests/`.
-- For package-local verification and coverage, run pytest against the package
-  config rather than the monorepo root config:
+- Pytest configuration is shared from the monorepo root `pyproject.toml`. For
+  focused package-local verification with the package's stricter coverage gate,
+  run:
 
 ```text
-uv run pytest -c src/log_generator/pyproject.toml --rootdir src/log_generator src/log_generator/tests
+uv run pytest src/log_generator/tests --cov=src/log_generator/src/log_generator --cov-branch --cov-report=term-missing:skip-covered --cov-fail-under=100
 ```
 
-- That command uses the package-local coverage settings and enforces the
-  current `100%` `log_generator` coverage gate without pulling unrelated
-  workspace members such as `http_to_arrow` into the report.
+- That command keeps the shared pytest defaults while enforcing the current
+  `100%` `log_generator` coverage gate without pulling unrelated workspace
+  members such as `http_to_arrow` into the report.
 - Focused validation currently uses package-local pytest files such as:
   - `tests/test_cli.py`
   - `tests/core/test_registry.py`

@@ -30,3 +30,15 @@ def test_historical_jittered_now_delegates_to_jittered_now(monkeypatch) -> None:
 
     assert time_utils.historical_jittered_now(months_back=2) == expected
     assert captured["max_offset_seconds"] == 2 * 730 * 3600
+
+
+@pytest.mark.unit
+def test_jittered_now_rejects_negative_offsets() -> None:
+    with pytest.raises(ValueError, match="max_offset_seconds must be >= 0"):
+        jittered_now(max_offset_seconds=-1)
+
+
+@pytest.mark.unit
+def test_historical_jittered_now_rejects_negative_months() -> None:
+    with pytest.raises(ValueError, match="months_back must be >= 0"):
+        time_utils.historical_jittered_now(months_back=-1)

@@ -42,7 +42,7 @@ __all__ = list(_EXPORTS.keys())
 
 # Dynamic attribute access for lazy loading of pool classes and utilities
 def __getattr__(name: str) -> Any:
-    """Lazy import CosmosDB clients to avoid eager dependency loading."""
+    """Lazily import and cache nginx pool classes and utilities defined in _EXPORTS."""
     module_name = _EXPORTS.get(name)
     if module_name is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

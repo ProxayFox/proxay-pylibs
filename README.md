@@ -27,9 +27,9 @@ Arrow-backed ingestion containers.
 The `log-generator` workspace package lives in `src/log_generator` and is
 intended for synthetic log generation from reusable, format-driven templates.
 
-- `faker`-backed field generation
-- format parsing for template-based log emission
-- future presets for formats such as NGINX access logs
+- template-based field generation
+- reusable generators for structured log emission
+- built-in presets for formats such as NGINX access logs
 
 ## Repository layout
 
