@@ -40,6 +40,12 @@ profiling = [
     "scalene>=2.1.4",
 ]
 
+docs = [
+    "mkdocs>=1.6.1",
+    "mkdocs-click>=0.9.0",
+    "mkdocs-material>=9.7.6",
+]
+
 # ──────────────────────────────────────────────
 # Shared Tooling Config (applies to whole repo)
 # ──────────────────────────────────────────────
