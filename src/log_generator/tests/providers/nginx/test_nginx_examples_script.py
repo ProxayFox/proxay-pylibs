@@ -5,6 +5,7 @@ from __future__ import annotations
 import builtins
 from pathlib import Path
 import runpy
+import sys
 
 import pytest
 
@@ -62,6 +63,11 @@ def test_example_module_main_entrypoint_executes_when_run_as_main(monkeypatch) -
         builtins,
         "print",
         lambda *args, **kwargs: printed.append(" ".join(str(arg) for arg in args)),
+    )
+    monkeypatch.delitem(
+        sys.modules,
+        "log_generator.providers.nginx.examples.main",
+        raising=False,
     )
 
     runpy.run_module("log_generator.providers.nginx.examples.main", run_name="__main__")

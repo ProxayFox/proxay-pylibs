@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import runpy
+import sys
 
 from click.testing import CliRunner
 import pytest
@@ -177,6 +178,7 @@ def test_cli_module_main_entrypoint_runs_group(monkeypatch) -> None:
         return 0
 
     monkeypatch.setattr("click.core.Command.main", fake_main)
+    monkeypatch.delitem(sys.modules, "log_generator.cli", raising=False)
 
     runpy.run_module("log_generator.cli", run_name="__main__")
 
