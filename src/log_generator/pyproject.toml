@@ -6,15 +6,12 @@ build-backend = "hatchling.build"
 name = "log-generator"
 version = "0.1.0"
 description = "A flexible synthetic log generator. Parse real log formats, forge fake logs."
-authors = [{ name = "ProxayFox", email = "28168887+ProxayFox@users.noreply.github.com" }]
+authors = [
+    { name = "ProxayFox", email = "28168887+ProxayFox@users.noreply.github.com" },
+]
 requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
-dependencies = [
-    "click>=8.3.1",
-    "faker>=40.11.1",
-    "pyyaml>=6.0.3",
-]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/log_generator"]

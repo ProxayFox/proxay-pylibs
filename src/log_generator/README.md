@@ -1,71 +1,111 @@
 # log-generator
 
-`log-generator` is a workspace package in `proxay-pylibs`.
+`log-generator` is a workspace package in `proxay-pylibs` focused on synthetic
+NGINX access-log generation.
 
-## Purpose
+## Implemented now
 
-Configurable synthetic log generator with format-driven templates.
+The current shipped slice provides a pool-driven NGINX generator that can:
 
-The initial package outline is aimed at building reusable generators for log
-formats such as NGINX access logs, including workflows that can derive emitted
-fields from an `log_format`-style template string.
+- generate realistic variable dictionaries for common NGINX log fields,
+- render shipped format strings into complete log lines,
+- support composite and conditional values such as request lines, forwarded-for
+    chains, and TLS fields,
+- render time fields from a fixed timestamp for deterministic tests.
 
-## Public API
+The root package now exposes provider namespaces rather than provider-specific
+helpers directly. Today that means:
 
-Document the main public classes, functions, or modules here.
+- `log_generator.nginx`
+- `log_generator.providers.nginx`
 
-Potential directions for the first implementation pass:
+Within the NGINX provider namespace, the shipped surface includes:
 
-- format string parsing for `log_format`-style definitions
-- pluggable field generators backed by `faker`
-- presets for common formats such as NGINX access logs
-- deterministic seeding for reproducible fixtures and tests
+- `generate_log_entry`
+- `format_log_line`
+- format constants:
+  - `DEFAULT_FORMAT`
+  - `JSON_FORMAT`
+  - `EXAMPLE_FORMAT`
+  - `PRODUCTION_FORMAT`
+  - `SHIPPED_FORMATS`
+
+## Example usage
+
+```python
+from log_generator import nginx
+
+entry = nginx.generate_log_entry()
+line = nginx.format_log_line(entry, nginx.PRODUCTION_FORMAT)
+
+print(line)
+```
+
+You can also import through the provider package explicitly:
+
+```python
+from log_generator.providers import nginx
+
+line = nginx.format_log_line(
+  nginx.generate_log_entry(),
+  nginx.DEFAULT_FORMAT,
+)
+```
+
+You can also request only a subset of variables when you want to test specific
+derived fields.
+
+```python
+from datetime import datetime, timezone
+
+from log_generator import nginx
+
+entry = nginx.generate_log_entry(
+  variables=["$request_method", "$uri", "$args", "$request_uri", "$request"],
+  timestamp=datetime(2026, 3, 29, 7, 31, 26, tzinfo=timezone.utc),
+)
+
+print(entry["$request_uri"])
+print(entry["$request"])
+```
+
+## Shipped formats
+
+The package currently treats these as shipped, test-backed formats:
+
+- default access-log style format
+- compact JSON-ish pipe-separated format
+- production-style example format with forwarded-for and TLS fields
+
+Those shipped formats are validated in pytest to ensure:
+
+- every referenced variable is registered,
+- rendered output contains no unresolved `$variable` placeholders,
+- delimiter shape remains stable after rendering.
+
+## Deferred for later
+
+These items are intentionally not shipped yet:
+
+- CLI entry point
+- YAML configuration
+- formal parser for arbitrary `log_format` strings
+- multi-provider architecture beyond NGINX
 
 ## Development notes
 
 - Runtime package code lives in `src/log_generator/`.
 - Package-specific tests live in `tests/`.
+- Focused validation currently uses package-local pytest files rather than a
+    broad repo-wide acceptance gate.
 
-## Inspirations
+## Inspirations and goals
 
 - ["josesolisrosales/logforge"](https://github.com/josesolisrosales/logforge)
 - ["cybersecurity-log-generator"](https://pypi.org/project/cybersecurity-log-generator/)
 
-## Goals differantiating from inspirations
-
-- The goal would be to have logs far more flexamble, e.g. generating nginx logs with log_format templates,
-  or even more complex formats with conditional fields.
-- The goal of the project is to work with ["ClickSIEM"](https://github.com/ProxayFox/ClickSIEM),
-  with the idea of having a companion package that can generate ClickSIEM-compatible logs for testing and demos.
-
-## Proposed package structure
-
-```text
-log_generator/
-├── src/
-│   └── log_generator/
-│       ├── __init__.py              # Public API
-│       ├── cli.py                   # CLI entry point
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── base.py              # Abstract base provider
-│       │   ├── registry.py          # Provider registry / plugin loader
-│       │   └── engine.py            # Generation engine (orchestrator)
-│       ├── providers/
-│       │   ├── __init__.py
-│       │   └── nginx/
-│       │       ├── __init__.py
-│       │       ├── provider.py      # NginxProvider class
-│       │       ├── parser.py        # log_format tokenizer / parser
-│       │       └── generators.py    # Per-variable value generators
-│       └── utils/
-│           ├── __init__.py
-│           └── time.py              # Shared time helpers
-├── tests/
-│   ├── test_nginx_parser.py
-│   ├── test_nginx_generator.py
-│   └── test_engine.py
-├── pyproject.toml
-├── README.md
-└── uv.lock
-```
+Longer term, the package is intended to support richer synthetic logging
+workflows, including ClickSIEM-oriented demos and test data generation, but the
+current release slice is deliberately NGINX-only and test-backed. Additional
+providers should plug into the same namespace-oriented API rather than adding
+provider-specific helpers to the root package.
