@@ -21,7 +21,7 @@ mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/uv-sync-all" << 'EOF'
 #!/bin/bash
 set -e
-uv sync --all-packages --extra dev --extra profiling "$@"
+uv sync --all-packages --extra dev --extra profiling --extra docs "$@"
 EOF
 
 cat > "$HOME/.local/bin/uv-sync-dev" << 'EOF'

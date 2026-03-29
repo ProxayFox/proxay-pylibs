@@ -8,7 +8,11 @@
 				"--from",
 				"markdownlint-rs",
 				"mdlint",
-				"check"
+				"check",
+				"--respect-ignore",
+				"--exclude",
+				".github/prompts/"
+
 			],
 			"problemMatcher": [],
 			"label": "mdlint: Lint Markdown files in workspace"
