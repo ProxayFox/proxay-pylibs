@@ -23,6 +23,12 @@
 		"vscode": {
 			"settings": {
 				"python.languageServer": "Pylance",
+				"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+				"python.analysis.autoSearchPaths": true,
+				"python.analysis.useLibraryCodeForTypes": true,
+				"python.analysis.diagnosticMode": "workspace",
+				"python.terminal.activateEnvInCurrentTerminal": true,
+				"python.terminal.activateEnvironment": true,
 				"ty.importStrategy": "fromEnvironment",
 				"ty.diagnosticMode": "openFilesOnly",
 				"ty.disableLanguageServices": true
@@ -40,7 +46,7 @@
 				"wholroyd.jinja",
 				"batisteo.vscode-django",
 				"KevinRose.vsc-python-indent",
-				"anysphere.cursorpyright", // Cursor Pyright extension
+				// "anysphere.cursorpyright", // Cursor Pyright extension
 				// Remote development extensions
 				"ms-vscode-remote.vscode-remote-extensionpack",
 				"GitHub.codespaces",

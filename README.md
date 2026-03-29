@@ -7,32 +7,65 @@ be shared across different projects.
 
 - The repository root holds shared tooling, workspace configuration, and docs.
 - Each reusable library lives in its own workspace member under `src/`.
-- Tests are collected from the root `tests/` directory.
+- Package-specific tests can live inside the package member, and shared tests can
+   still live at the repository root.
 
 ## Current packages
 
-### `proxay-utils`
+### `http-to-arrow`
 
-The first workspace package lives in `src/proxay_utils` and provides lightweight
-collection helpers:
+The current workspace package lives in `src/http_to_arrow` and provides
+Arrow-backed ingestion containers.
 
-- `chunked(iterable, size)`
-- `flatten_once(iterables)`
+- `ArrowRecordContainer`
+- `UnknownFieldPolicy`
+- `MissingFieldPolicy`
+- `CoercionPolicy`
 
 ## Repository layout
 
 - `pyproject.toml` - shared workspace and test configuration
 - `src/` - workspace members, one package per subdirectory
-- `tests/` - repository-level tests for workspace packages
+- `templates/` - starter templates for new workspace members
+- `tests/` - shared integration or multi-package tests when needed
 - `.devcontainer/` - development container setup
 - `flake.nix` - optional Nix development shell
+
+## Standard package scaffold
+
+New packages should follow this layout:
+
+- `src/<member>/pyproject.toml`
+- `src/<member>/README.md`
+- `src/<member>/src/<import_package>/\_\_init\_\_.py`
+- `src/<member>/src/<import_package>/...`
+- `src/<member>/tests/test_*.py`
+
+This keeps implementation code out of the package project root while still using
+the standard Python `src` layout that tools like Hatch, pytest, and Pylance
+handle well.
+
+## Starter template
+
+A reusable starter lives in `templates/python-package/`.
+
+Use it when you want the fastest path to a new package member without needing to
+remember the full scaffold from scratch.
+
+The starter includes:
+
+- a package `pyproject.toml` template
+- a package README template
+- a minimal `src/<import_package>/` starter
+- a package-local smoke test template
 
 ## Quick start
 
 1. Sync the shared development environment with
    `uv sync --all-packages --extra dev`.
 2. Run tests with `uv run pytest`.
-3. Add new packages under `src/<package_name>/` with their own `pyproject.toml`.
+3. Add new packages under `src/<package_name>/` using the standard package
+   scaffold described below.
 
 ## Development container
 
@@ -49,6 +82,8 @@ The post-create setup also:
 When you add a new reusable library:
 
 1. Create a new workspace member under `src/`.
-2. Give it its own `pyproject.toml` and package code.
-3. Add tests under `tests/`.
-4. Update this README if the new package should be discoverable by other users.
+2. Copy the starter files from `templates/python-package/`.
+3. Replace the template placeholders and rename `package_name`.
+4. Put runtime package code under `src/<member>/src/<import_package>/`.
+5. Put package-specific tests under `src/<member>/tests/`.
+6. Update this README if the new package should be discoverable by other users.

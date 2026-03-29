@@ -32,6 +32,7 @@ dev = [
     "deptry>=0.24.0",
     "vulture>=2.16",
     "bandit>=1.8.6",
+    "pyarrow-stubs>=20.0.0.20251215",
 ]
 
 profiling = [
@@ -44,7 +45,7 @@ profiling = [
 # ──────────────────────────────────────────────
 [tool.pytest.ini_options]
 minversion = "6.0"
-testpaths = ["tests"]
+testpaths = ["tests", "src"]
 python_files = ["test_*.py", "*_test.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

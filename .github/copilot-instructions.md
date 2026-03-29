@@ -15,6 +15,10 @@
 
 - Prefer one independent library per workspace member under `src/<package-dir>/`.
 - Each package should own its runtime dependencies and packaging metadata locally.
+- Prefer the standard Python source layout inside each member:
+  `src/<member>/src/<import_package>/`.
+- Keep the project root of each workspace member focused on local docs,
+  package config, and package-specific tests.
 - Keep package internals self-contained unless cross-package coupling is intentional.
 - Put package-specific scripts, examples, and docs with the package when possible.
 - Choose directory, distribution, and import names that are easy to map to each other.
@@ -25,7 +29,7 @@
 - Preferred bootstrap command: `uv sync --all-packages --extra dev`.
 - The devcontainer creates `uv-sync-dev` and `uv-sync-all`; reuse those helpers.
 - Run tests with `uv run pytest`.
-- Pytest is configured at the root and currently discovers tests from `tests/`.
+- Pytest is configured at the root and discovers tests from `tests/` and `src/`.
 - Keep shared tool configuration in the root `pyproject.toml` when supported.
 - Reuse the existing Markdown lint task for Markdown validation.
 
@@ -41,6 +45,8 @@
 
 - Use the existing pytest markers: `unit`, `integration`, `performance`, and `slow`.
 - Keep tests aligned with the behavior they validate.
+- Put package-specific tests with the package when practical, usually as `src/<member>/tests/`.
+- Reserve the root `tests/` directory for shared integration or multi-package tests.
 - Add at least basic smoke or unit coverage for each new package.
 
 ## Working In This Repository
@@ -55,5 +61,10 @@
 
 - Read the root `pyproject.toml` and relevant `src/` package before editing.
 - Scaffold new libraries as workspace members instead of bolting code onto the root.
+- For new packages, prefer this shape: `src/<member>/pyproject.toml`,
+  `src/<member>/README.md`, `src/<member>/src/<import_package>/`,
+  and `src/<member>/tests/`.
+- Reuse `templates/python-package/` as the default starter for new packages
+  before inventing package structure from scratch.
 - Clarify whether “the project” means the monorepo root or a specific package.
 - Prefer incremental, package-focused changes that preserve workspace conventions.
