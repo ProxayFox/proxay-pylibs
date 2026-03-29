@@ -6,7 +6,7 @@ from pathlib import Path
 
 import click
 
-from .core import LogEngine, all_providers, get_provider
+from .core import LogEngine, all_providers
 
 
 def _build_engine(provider_name: str) -> LogEngine:
@@ -27,6 +27,8 @@ def _echo_providers() -> None:
     for provider_name, provider in all_providers().items():
         presets = ", ".join(provider.available_presets())
         click.echo(f"{provider_name}: {presets}")
+        if provider.description:
+            click.echo(f"  {provider.description}")
 
 
 @main.command("providers")
@@ -39,6 +41,30 @@ def providers_command() -> None:
 def sources_command() -> None:
     """Backward-compatible alias for ``providers``."""
     _echo_providers()
+
+
+@main.command("presets")
+@click.option(
+    "--provider",
+    "provider_name",
+    default="nginx",
+    show_default=True,
+    help="Provider whose shipped presets should be listed.",
+)
+@click.option(
+    "--show-formats",
+    is_flag=True,
+    help="Include the underlying format strings in the output.",
+)
+def presets_command(provider_name: str, show_formats: bool) -> None:
+    """List available presets for a provider."""
+    provider = _build_engine(provider_name).provider
+
+    for preset_name, label, log_format in provider.preset_details():
+        default_marker = " (default)" if preset_name == provider.default_preset else ""
+        click.echo(f"{preset_name}{default_marker}: {label}")
+        if show_formats:
+            click.echo(f"  {log_format}")
 
 
 @main.command("generate")

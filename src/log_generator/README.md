@@ -29,6 +29,7 @@ Within the NGINX provider namespace, the shipped surface includes:
 - `NginxProvider`
 - `NGINX_PROVIDER`
 - `PRESETS`
+- `PRESET_DETAILS`
 - format constants:
   - `DEFAULT_FORMAT`
   - `JSON_FORMAT`
@@ -98,6 +99,7 @@ The package now ships a Click-based CLI through the `log_generator` command.
 
 ```text
 uv run log_generator providers
+uv run log_generator presets
 uv run log_generator generate -n 5
 uv run log_generator generate -p production -n 2
 uv run log_generator generate -f '$remote_addr [$time_iso8601] "$request" $status'
@@ -107,6 +109,7 @@ uv run log_generator generate -p json -n 10 -o /tmp/fake_nginx.log
 Current CLI commands:
 
 - `providers` — list registered providers and their shipped presets
+- `presets` — list preset names and labels for a provider, optionally with raw formats
 - `sources` — backward-compatible alias for `providers`
 - `generate` — emit lines for a preset or custom format
 

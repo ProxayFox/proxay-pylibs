@@ -25,12 +25,22 @@ PRESETS: dict[str, str] = {
     "production": PRODUCTION_FORMAT,
 }
 
+PRESET_DETAILS: tuple[tuple[str, str, str], ...] = (
+    ("default", "Default Format Example", DEFAULT_FORMAT),
+    ("json", "JSON Format Example", JSON_FORMAT),
+    ("example", "Example Format Example", EXAMPLE_FORMAT),
+    ("production", "Production Format Example", PRODUCTION_FORMAT),
+)
+
 
 class NginxProvider(BaseProvider):
     """Provider adapter that delegates to the existing NGINX pools layer."""
 
     name = "nginx"
     default_preset = "default"
+    description = (
+        "Synthetic NGINX access-log generation backed by pool-based variables."
+    )
 
     @property
     def presets(self) -> Mapping[str, str]:
@@ -41,6 +51,10 @@ class NginxProvider(BaseProvider):
     def shipped_formats(self) -> tuple[tuple[str, str], ...]:
         """Return the shipped format labels used in docs and tests."""
         return SHIPPED_FORMATS
+
+    def preset_details(self) -> tuple[tuple[str, str, str], ...]:
+        """Return CLI-friendly preset names, labels, and format strings."""
+        return PRESET_DETAILS
 
     def generate_entry(
         self,

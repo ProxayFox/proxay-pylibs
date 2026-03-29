@@ -18,8 +18,22 @@ def test_nginx_provider_is_registered() -> None:
 
     assert provider is nginx.NGINX_PROVIDER
     assert provider.name == "nginx"
+    assert provider.description
     assert provider.default_preset == "default"
     assert provider.available_presets() == ("default", "json", "example", "production")
+
+
+@pytest.mark.unit
+def test_registered_provider_exposes_preset_details() -> None:
+    provider = get_provider("nginx")
+
+    preset_names = tuple(name for name, _, _ in provider.preset_details())
+
+    assert preset_names == provider.available_presets()
+    assert any(
+        label == "Production Format Example"
+        for _, label, _ in provider.preset_details()
+    )
 
 
 @pytest.mark.unit

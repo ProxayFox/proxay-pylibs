@@ -12,6 +12,7 @@ class BaseProvider(ABC):
 
     name: str
     default_preset: str
+    description: str = ""
 
     @property
     @abstractmethod
@@ -26,6 +27,10 @@ class BaseProvider(ABC):
     def available_presets(self) -> tuple[str, ...]:
         """Return the provider preset names in declaration order."""
         return tuple(self.presets)
+
+    def preset_details(self) -> tuple[tuple[str, str, str], ...]:
+        """Return ``(preset_name, display_label, format_string)`` tuples."""
+        return tuple((name, name, fmt) for name, fmt in self.presets.items())
 
     def resolve_format(
         self, *, preset: str | None = None, log_format: str | None = None

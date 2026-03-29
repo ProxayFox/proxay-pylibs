@@ -17,6 +17,7 @@ def test_providers_command_lists_nginx_and_presets() -> None:
 
     assert result.exit_code == 0
     assert "nginx:" in result.output
+    assert "Synthetic NGINX access-log generation" in result.output
     assert "default" in result.output
     assert "production" in result.output
 
@@ -27,6 +28,24 @@ def test_sources_alias_lists_registered_providers() -> None:
 
     assert result.exit_code == 0
     assert "nginx:" in result.output
+
+
+@pytest.mark.unit
+def test_presets_command_lists_provider_presets_and_default_marker() -> None:
+    result = CliRunner().invoke(main, ["presets"])
+
+    assert result.exit_code == 0
+    assert "default (default): Default Format Example" in result.output
+    assert "production: Production Format Example" in result.output
+
+
+@pytest.mark.unit
+def test_presets_command_can_show_underlying_format_strings() -> None:
+    result = CliRunner().invoke(main, ["presets", "--show-formats"])
+
+    assert result.exit_code == 0
+    assert "$remote_addr" in result.output
+    assert "$time_iso8601" in result.output
 
 
 @pytest.mark.unit
@@ -91,6 +110,14 @@ def test_generate_command_rejects_conflicting_preset_and_format() -> None:
 @pytest.mark.unit
 def test_generate_command_rejects_unknown_provider() -> None:
     result = CliRunner().invoke(main, ["generate", "--provider", "apache"])
+
+    assert result.exit_code != 0
+    assert "Unknown provider" in result.output
+
+
+@pytest.mark.unit
+def test_presets_command_rejects_unknown_provider() -> None:
+    result = CliRunner().invoke(main, ["presets", "--provider", "apache"])
 
     assert result.exit_code != 0
     assert "Unknown provider" in result.output
