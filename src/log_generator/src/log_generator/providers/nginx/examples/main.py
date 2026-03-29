@@ -43,10 +43,14 @@ SHIPPED_FORMATS: tuple[tuple[str, str], ...] = (
     ("Example Format Example", EXAMPLE_FORMAT),
 )
 
-PRINT: list[tuple[str, str]] = [
-    *SHIPPED_FORMATS,
+EXPLORATORY_FORMATS: tuple[tuple[str, str], ...] = (
     ("Example Format with All Variables", " ".join(all_pools().keys())),
     ("Example Format with All Variables (JSON)", "|".join(all_pools().keys())),
+)
+
+PRINT: list[tuple[str, str]] = [
+    *SHIPPED_FORMATS,
+    *EXPLORATORY_FORMATS,
 ]
 
 
