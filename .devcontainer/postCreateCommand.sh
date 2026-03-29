@@ -21,13 +21,13 @@ mkdir -p "$HOME/.local/bin"
 cat > "$HOME/.local/bin/uv-sync-all" << 'EOF'
 #!/bin/bash
 set -e
-uv sync --extra dev --extra profiling "$@"
+uv sync --all-packages --extra dev --extra profiling "$@"
 EOF
 
 cat > "$HOME/.local/bin/uv-sync-dev" << 'EOF'
 #!/bin/bash
 set -e
-uv sync --extra dev "$@"
+uv sync --all-packages --extra dev "$@"
 EOF
 
 chmod +x "$HOME/.local/bin/uv-sync-all" "$HOME/.local/bin/uv-sync-dev"
@@ -39,7 +39,7 @@ fi
 
 # Sync dependencies
 echo "Installing Python dependencies..."
-if uv sync --extra dev; then
+if uv sync --all-packages --extra dev; then
     echo "Dependencies installed successfully"
 else
     echo "Failed to install dependencies"

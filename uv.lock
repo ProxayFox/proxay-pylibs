@@ -2,6 +2,12 @@ version = 1
 revision = 3
 requires-python = ">=3.14"
 
+[manifest]
+members = [
+    "proxay-pylibs",
+    "proxay-utils",
+]
+
 [[package]]
 name = "annotated-types"
 version = "0.7.0"
@@ -427,6 +433,11 @@ requires-dist = [
     { name = "vulture", marker = "extra == 'dev'", specifier = ">=2.16" },
 ]
 provides-extras = ["dev", "profiling"]
+
+[[package]]
+name = "proxay-utils"
+version = "0.1.0"
+source = { editable = "src/proxay_utils" }
 
 [[package]]
 name = "psutil"

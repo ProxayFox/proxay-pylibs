@@ -1,7 +1,7 @@
 [project]
 name = "proxay-pylibs"
 version = "0.1.0"
-description = "A collection of Python libraries for various purposes, including data processing, machine learning, and web development."
+description = "A uv-managed monorepo of reusable Python packages for Proxay projects."
 authors = [{ name = "ProxayFox", email = "28168887+ProxayFox@users.noreply.github.com" }]
 requires-python = ">=3.14"
 readme = "README.md"
