@@ -64,8 +64,20 @@ The starter includes:
 1. Sync the shared development environment with
    `uv sync --all-packages --extra dev`.
 2. Run tests with `uv run pytest`.
-3. Add new packages under `src/<package_name>/` using the standard package
+3. Review the default terminal coverage summary emitted by pytest-cov.
+4. Add new packages under `src/<package_name>/` using the standard package
    scaffold described below.
+
+## Testing and coverage
+
+- The shared pytest configuration lives in the repository root `pyproject.toml`.
+- `uv run pytest` includes coverage by default for the current `http_to_arrow`
+   package while the workspace is still small and focused.
+- Coverage is reported with branch tracking and a terminal summary of missing
+   lines, so contributors can see gaps without extra flags.
+- The current default coverage gate is set to 90% for the package under test;
+   if more workspace members are added later, this can be widened or scoped per
+   package as needed.
 
 ## Development container
 

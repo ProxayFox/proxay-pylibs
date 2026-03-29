@@ -136,6 +136,19 @@ class UpperKeyContainer(ArrowRecordContainer):
 
 
 @pytest.mark.unit
+def test_default_normalize_record_copies_non_dict_mapping() -> None:
+    container = ArrowRecordContainer(
+        schema=pa.schema([pa.field("id", pa.int64())]),
+    )
+
+    record = PassthroughMapping({"id": 9})
+    normalized = container.normalize_record(record)
+
+    assert normalized == {"id": 9}
+    assert normalized is not record
+
+
+@pytest.mark.unit
 def test_normalize_record_hook_is_used_for_non_default_container() -> None:
     container = UpperKeyContainer(
         schema=pa.schema([pa.field("id", pa.int64())]),
@@ -144,6 +157,27 @@ def test_normalize_record_hook_is_used_for_non_default_container() -> None:
     container.append(PassthroughMapping({"ID": 7}))
 
     assert container.to_table().column("id").to_pylist() == [7]
+
+
+@pytest.mark.unit
+def test_helper_coercion_methods_cover_non_string_naive_and_passthrough_paths() -> None:
+    naive_timestamp = ArrowRecordContainer._coerce_timestamp_value(
+        "2024-01-02T03:04:05"
+    )
+    dt_value = datetime(2024, 1, 2, 3, 4, 5)
+
+    assert naive_timestamp == dt_value
+    assert ArrowRecordContainer._coerce_timestamp_value(dt_value) is dt_value
+    assert ArrowRecordContainer._coerce_value(None, pa.int64()) is None
+    assert (
+        ArrowRecordContainer._coerce_value(
+            "scalar", pa.struct([pa.field("id", pa.int64())]))
+        == "scalar"
+    )
+    assert (
+        ArrowRecordContainer._coerce_value("scalar", pa.list_(pa.int64()))
+        == "scalar"
+    )
 
 
 @pytest.mark.unit
@@ -167,6 +201,47 @@ def test_extend_and_incremental_flush_manage_pending_batches_and_table() -> None
 
 
 @pytest.mark.unit
+def test_exact_key_append_allows_missing_fields_as_nulls_by_default() -> None:
+    container = ArrowRecordContainer(
+        schema=pa.schema([
+            pa.field("id", pa.int64()),
+            pa.field("name", pa.string()),
+        ]),
+    )
+
+    container.append({"id": 1})
+
+    assert container.to_table().to_pydict() == {"id": [1], "name": [None]}
+
+
+@pytest.mark.unit
+def test_slow_path_append_allows_missing_fields_as_nulls_by_default() -> None:
+    container = ArrowRecordContainer(
+        schema=pa.schema([
+            pa.field("id", pa.int64()),
+            pa.field("name", pa.string()),
+        ]),
+    )
+
+    container.append({"id": 1, "extra": "ignored"})
+
+    assert container.to_table().to_pydict() == {"id": [1], "name": [None]}
+
+
+@pytest.mark.unit
+def test_slow_path_append_flushes_when_batch_size_is_reached() -> None:
+    container = ArrowRecordContainer(
+        schema=pa.schema([pa.field("id", pa.int64())]),
+        batch_size=1,
+    )
+
+    container.append({"ID": 1})
+
+    assert container.batch_total_rows == 1
+    assert container.to_table().column("id").to_pylist() == [1]
+
+
+@pytest.mark.unit
 def test_to_table_concatenates_with_existing_cached_table() -> None:
     schema = pa.schema([pa.field("id", pa.int64())])
     cached = pa.Table.from_pydict({"id": [10]}, schema=schema)
@@ -175,6 +250,29 @@ def test_to_table_concatenates_with_existing_cached_table() -> None:
     container.append({"id": 11})
 
     assert container.to_table().column("id").to_pylist() == [10, 11]
+
+
+@pytest.mark.unit
+def test_to_table_returns_empty_table_for_empty_container() -> None:
+    schema = pa.schema([pa.field("id", pa.int64())])
+    container = ArrowRecordContainer(schema=schema)
+
+    table = container.to_table()
+
+    assert table.schema.equals(schema)
+    assert table.num_rows == 0
+
+
+@pytest.mark.unit
+def test_to_table_returns_cached_table_when_no_batches_are_pending() -> None:
+    schema = pa.schema([pa.field("id", pa.int64())])
+    cached = pa.Table.from_pydict({"id": [42]}, schema=schema)
+    container = ArrowRecordContainer(schema=schema, table=cached)
+
+    table = container.to_table()
+
+    assert table is cached
+    assert table.column("id").to_pylist() == [42]
 
 
 @pytest.mark.unit
