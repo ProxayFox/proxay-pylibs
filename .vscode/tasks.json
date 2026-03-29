@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "process",
+			"command": "uvx",
+			"args": [
+				"--from",
+				"markdownlint-rs",
+				"mdlint",
+				"check"
+			],
+			"problemMatcher": [],
+			"label": "mdlint: Lint Markdown files in workspace"
+		}
+	]
+}

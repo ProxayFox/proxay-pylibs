@@ -1,0 +1,72 @@
+[project]
+name = "proxay-pylibs"
+version = "0.1.0"
+description = "A collection of Python libraries for various purposes, including data processing, machine learning, and web development."
+authors = [{ name = "ProxayFox", email = "28168887+ProxayFox@users.noreply.github.com" }]
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+dependencies = []
+
+# ──────────────────────────────────────────────
+# Workspace Definition
+# ──────────────────────────────────────────────
+[tool.uv.workspace]
+members = ["src/*"]
+
+[tool.uv]
+package = false  # ← Root is NOT a package, just a workspace root
+
+# ──────────────────────────────────────────────
+# Shared dev dependencies (available everywhere)
+# ──────────────────────────────────────────────
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4.2",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "ty>=0.0.26",
+    "pre-commit>=4.3.0",
+    "deptry>=0.24.0",
+    "vulture>=2.16",
+    "bandit>=1.8.6",
+]
+
+profiling = [
+    "pyinstrument>=5.1.2",
+    "scalene>=2.1.4",
+]
+
+# ──────────────────────────────────────────────
+# Shared Tooling Config (applies to whole repo)
+# ──────────────────────────────────────────────
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--tb=short",
+    "--strict-markers",
+    "--disable-warnings",
+    "--color=yes"
+]
+markers = [
+    "unit: marks tests as unit tests (fast, isolated)",
+    "integration: marks tests as integration tests (slower, multi-component)",
+    "performance: marks tests as performance benchmarks (resource-intensive)",
+    "slow: marks tests as slow-running (excluded by default)"
+]
+
+[tool.deptry]
+ignore_notebooks = true
+
+[tool.ty.environment]
+python-version = "3.14"
+
+[tool.ty.terminal]
+output-format = "full"

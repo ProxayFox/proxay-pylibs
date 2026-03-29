@@ -1,0 +1,88 @@
+{
+  "files.exclude": {
+    "**/__pycache__": true,
+    "**/*.pyc": true,
+    "**/*.pyo": true,
+    "**/*.pyd": true,
+    "*.egg-info": true,
+    ".pytest_cache": true,
+    ".venv": true,
+    ".direnv": true,
+    ".githooks": true,
+    ".envrc": true,
+
+  },
+  "search.exclude": {
+    "**/dist": true,
+    "**/build": true,
+    "**/.git": true,
+    "**/logs": true,
+    "**/*.log": true,
+    "**/*.json": true
+  },
+  "files.watcherExclude": {
+    "**/dist/**": true,
+    "**/build/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/logs/**": true,
+    "**/*.log": true,
+  },
+  "github.copilot.enable": {
+    "*": true,
+    "plaintext": false,
+    "log": false,
+  },
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "ms-python.black-formatter",
+  "markdownlint.enabled": true,
+  "markdownlint.run": "onType",
+  "markdownlint.config": {
+    "default": true,
+    "MD013": {
+      "line_length": 120
+    }
+  },
+  "markdownlint.ignore": [
+    ".venv/**",
+    "python_template.egg-info/**",
+    "**/site-packages/**",
+    "**/*.dist-info/**"
+  ],
+  "remote.autoForwardPortsFallback": 0,
+  "remote.localPortHost": "allInterfaces",
+  "chat.agent.maxRequests": 250,
+  "chat.agent.enabled": true,
+  "chat.customAgentInSubagent.enabled": true,
+  "github.copilot.chat.searchSubagent.enabled": true,
+  "github.copilot.chat.searchSubagent.useAgenticProxy": true,
+  "github.copilot.chat.anthropic.thinking.budgetTokens": 32000,
+  "github.copilot.chat.anthropic.toolSearchTool.mode": "client",
+  "github.copilot.chat.anthropic.tools.websearch.enabled": true,
+  "github.copilot.chat.agent.autoFix": true,
+  "github.copilot.chat.alternateGptPrompt.enabled": true,
+  "chat.tools.terminal.autoApprove": {
+    // Python tools
+    "uv run pytest": true,
+    "uv run ty": true,
+    "uv run vulture": true,
+    "uvx": true,
+    // Common tools
+    "rg":true,
+    "echo": true,
+    "ls": true,
+    "jq": true,
+    "file": true,
+    "which": true,
+    "cd": true,
+    // Git commands
+    "git status": true,
+    "git diff": true,
+    "git log": true,
+    "git show": true,
+    "git branch": true,
+    "git checkout": true,
+    "git pull": true,
+    "git push": true,
+  },
+}
