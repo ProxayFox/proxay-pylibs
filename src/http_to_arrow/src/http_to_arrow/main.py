@@ -78,7 +78,8 @@ class ArrowRecordContainer:
     def __post_init__(self) -> None:
         if self.table is not None and not self.table.schema.equals(self.schema):
             raise ValueError(
-                "Cached table schema must match the container schema.")
+                "Cached table schema must match the container schema."
+            )
 
         self._schema_fields = tuple(self.schema)
         self._schema_field_names = frozenset(

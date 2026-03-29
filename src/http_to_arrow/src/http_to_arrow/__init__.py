@@ -1,6 +1,6 @@
 """Public exports for the http_to_arrow package."""
 
-from .collections import (
+from http_to_arrow.main import (
     ArrowRecordContainer,
     CoercionPolicy,
     MissingFieldPolicy,
