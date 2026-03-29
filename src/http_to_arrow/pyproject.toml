@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "http-to-arrow"
+version = "0.1.0"
+description = "Stream HTTP data to Apache Arrow format for efficient processing and analytics."
+authors = [{ name = "ProxayFox", email = "28168887+ProxayFox@users.noreply.github.com" }]
+requires-python = ">=3.14"
+readme = "README.md"
+license = "MIT"
+dependencies = [
+    "polars>=1.39.3",
+    "pyarrow>=23.0.1",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/http_to_arrow"]
