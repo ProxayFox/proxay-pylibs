@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from log_generator import nginx, providers
+from log_generator import core, nginx, providers
 
 
 @pytest.mark.unit
@@ -17,12 +17,19 @@ def test_package_imports() -> None:
 @pytest.mark.unit
 def test_public_api_exports_expected_generation_helpers() -> None:
     assert providers.nginx is nginx
+    assert core.get_provider("nginx") is nginx.NGINX_PROVIDER
     assert callable(nginx.generate_log_entry)
     assert callable(nginx.format_log_line)
     assert nginx.PRODUCTION_FORMAT == nginx.EXAMPLE_FORMAT
     assert nginx.DEFAULT_FORMAT
     assert nginx.JSON_FORMAT
     assert nginx.SHIPPED_FORMATS
+
+
+@pytest.mark.unit
+def test_root_package_exposes_core_namespace() -> None:
+    assert callable(core.LogEngine.from_provider)
+    assert "nginx" in core.provider_names()
 
 
 @pytest.mark.unit
