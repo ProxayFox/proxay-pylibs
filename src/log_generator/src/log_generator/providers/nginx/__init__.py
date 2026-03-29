@@ -8,11 +8,15 @@ from .examples.main import (
     SHIPPED_FORMATS,
 )
 from .pools import format_log_line, generate_log_entry
+from .provider import NGINX_PROVIDER, PRESETS, NginxProvider
 
 __all__ = [
     "DEFAULT_FORMAT",
     "EXAMPLE_FORMAT",
+    "NGINX_PROVIDER",
+    "NginxProvider",
     "JSON_FORMAT",
+    "PRESETS",
     "PRODUCTION_FORMAT",
     "SHIPPED_FORMATS",
     "format_log_line",
