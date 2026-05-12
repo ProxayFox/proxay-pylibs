@@ -20,8 +20,7 @@ CoercionPolicy = Literal["coerce", "strict"]
 class ArrowRecordContainer:
     """Batch incoming records into Arrow tables using a fixed schema."""
 
-    schema: pa.Schema = field(
-        init=True, doc="PyArrow schema for the container data.")
+    schema: pa.Schema = field(init=True, doc="PyArrow schema for the container data.")
     table: pa.Table | None = field(
         default=None,
         init=True,
@@ -67,19 +66,15 @@ class ArrowRecordContainer:
         init=False,
         repr=False,
     )
-    _uses_default_normalizer: bool = field(
-        default=False, init=False, repr=False)
-    _accumulator: dict[str, list] = field(
-        default_factory=dict, init=False, repr=False)
+    _uses_default_normalizer: bool = field(default=False, init=False, repr=False)
+    _accumulator: dict[str, list] = field(default_factory=dict, init=False, repr=False)
     _current_count: int = field(default=0, init=False, repr=False)
     _pending_batch_rows: int = field(default=0, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
     def __post_init__(self) -> None:
         if self.table is not None and not self.table.schema.equals(self.schema):
-            raise ValueError(
-                "Cached table schema must match the container schema."
-            )
+            raise ValueError("Cached table schema must match the container schema.")
 
         self._schema_fields = tuple(self.schema)
         self._schema_field_names = frozenset(
@@ -120,7 +115,7 @@ class ArrowRecordContainer:
 
         try:
             parsed = datetime.fromisoformat(iso_value)
-        except (ValueError, TypeError):
+        except ValueError, TypeError:
             return None
 
         if parsed.tzinfo is not None:
@@ -191,8 +186,7 @@ class ArrowRecordContainer:
 
         if self.unknown_field_policy == "error":
             extra_keys = ", ".join(sorted(extras))
-            raise ValueError(
-                f"Unexpected fields not present in schema: {extra_keys}")
+            raise ValueError(f"Unexpected fields not present in schema: {extra_keys}")
 
         if self.unknown_field_policy == "capture":
             self.captured_extras.append(extras)
@@ -288,7 +282,7 @@ class ArrowRecordContainer:
                     type=arrow_field.type,
                     from_pandas=False,
                 )
-            except pa.lib.ArrowInvalid as exc:
+            except pa.ArrowInvalid as exc:
                 raise ValueError(
                     f"Invalid data for column '{arrow_field.name}': {exc}"
                 ) from exc
@@ -299,8 +293,7 @@ class ArrowRecordContainer:
 
             arrays.append(array)
 
-        self.batches.append(pa.RecordBatch.from_arrays(
-            arrays, schema=self.schema))
+        self.batches.append(pa.RecordBatch.from_arrays(arrays, schema=self.schema))
         self._pending_batch_rows += self.batches[-1].num_rows
         self._init_accumulator()
 
@@ -318,8 +311,7 @@ class ArrowRecordContainer:
                     self.table = pa.Table.from_batches([], schema=self.schema)
                 return self.table
 
-            batch_table = pa.Table.from_batches(
-                self.batches, schema=self.schema)
+            batch_table = pa.Table.from_batches(self.batches, schema=self.schema)
             self.table = (
                 pa.concat_tables([self.table, batch_table])
                 if self.table is not None
@@ -345,8 +337,7 @@ class ArrowRecordContainer:
             if self._pending_batch_rows <= threshold:
                 return False
 
-            batch_table = pa.Table.from_batches(
-                self.batches, schema=self.schema)
+            batch_table = pa.Table.from_batches(self.batches, schema=self.schema)
             self.table = (
                 pa.concat_tables([self.table, batch_table])
                 if self.table is not None

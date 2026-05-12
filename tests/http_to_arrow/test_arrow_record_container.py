@@ -24,18 +24,19 @@ def test_constructor_rejects_cached_table_with_mismatched_schema() -> None:
     with pytest.raises(ValueError, match="Cached table schema"):
         ArrowRecordContainer(
             schema=schema,
-            table=pa.Table.from_pydict(
-                {"name": ["alpha"]}, schema=other_schema),
+            table=pa.Table.from_pydict({"name": ["alpha"]}, schema=other_schema),
         )
 
 
 @pytest.mark.unit
 def test_append_materializes_rows_into_an_arrow_table() -> None:
     container = ArrowRecordContainer(
-        schema=pa.schema([
-            pa.field("id", pa.int64()),
-            pa.field("name", pa.string()),
-        ]),
+        schema=pa.schema(
+            [
+                pa.field("id", pa.int64()),
+                pa.field("name", pa.string()),
+            ]
+        ),
         batch_size=2,
     )
 
@@ -87,10 +88,12 @@ def test_unknown_fields_can_be_captured() -> None:
 @pytest.mark.unit
 def test_missing_fields_raise_when_policy_is_error() -> None:
     container = ArrowRecordContainer(
-        schema=pa.schema([
-            pa.field("id", pa.int64()),
-            pa.field("name", pa.string()),
-        ]),
+        schema=pa.schema(
+            [
+                pa.field("id", pa.int64()),
+                pa.field("name", pa.string()),
+            ]
+        ),
         missing_field_policy="error",
     )
 
@@ -101,10 +104,12 @@ def test_missing_fields_raise_when_policy_is_error() -> None:
 @pytest.mark.unit
 def test_append_matches_case_insensitive_keys_on_slow_path() -> None:
     container = ArrowRecordContainer(
-        schema=pa.schema([
-            pa.field("id", pa.int64()),
-            pa.field("name", pa.string()),
-        ]),
+        schema=pa.schema(
+            [
+                pa.field("id", pa.int64()),
+                pa.field("name", pa.string()),
+            ]
+        ),
     )
 
     container.append({"ID": 1, "Name": "alpha"})
@@ -171,12 +176,12 @@ def test_helper_coercion_methods_cover_non_string_naive_and_passthrough_paths() 
     assert ArrowRecordContainer._coerce_value(None, pa.int64()) is None
     assert (
         ArrowRecordContainer._coerce_value(
-            "scalar", pa.struct([pa.field("id", pa.int64())]))
+            "scalar", pa.struct([pa.field("id", pa.int64())])
+        )
         == "scalar"
     )
     assert (
-        ArrowRecordContainer._coerce_value("scalar", pa.list_(pa.int64()))
-        == "scalar"
+        ArrowRecordContainer._coerce_value("scalar", pa.list_(pa.int64())) == "scalar"
     )
 
 
@@ -203,10 +208,12 @@ def test_extend_and_incremental_flush_manage_pending_batches_and_table() -> None
 @pytest.mark.unit
 def test_exact_key_append_allows_missing_fields_as_nulls_by_default() -> None:
     container = ArrowRecordContainer(
-        schema=pa.schema([
-            pa.field("id", pa.int64()),
-            pa.field("name", pa.string()),
-        ]),
+        schema=pa.schema(
+            [
+                pa.field("id", pa.int64()),
+                pa.field("name", pa.string()),
+            ]
+        ),
     )
 
     container.append({"id": 1})
@@ -217,10 +224,12 @@ def test_exact_key_append_allows_missing_fields_as_nulls_by_default() -> None:
 @pytest.mark.unit
 def test_slow_path_append_allows_missing_fields_as_nulls_by_default() -> None:
     container = ArrowRecordContainer(
-        schema=pa.schema([
-            pa.field("id", pa.int64()),
-            pa.field("name", pa.string()),
-        ]),
+        schema=pa.schema(
+            [
+                pa.field("id", pa.int64()),
+                pa.field("name", pa.string()),
+            ]
+        ),
     )
 
     container.append({"id": 1, "extra": "ignored"})
@@ -337,25 +346,31 @@ def test_to_polars_frame_uses_cached_table_fast_path() -> None:
 
 @pytest.mark.unit
 def test_timestamp_struct_and_list_values_are_coerced_to_arrow_shapes() -> None:
-    schema = pa.schema([
-        pa.field("event_at", pa.timestamp("us")),
-        pa.field(
-            "payload",
-            pa.struct([
-                pa.field("count", pa.int64()),
-                pa.field("nested_at", pa.timestamp("us")),
-            ]),
-        ),
-        pa.field(
-            "tags",
-            pa.list_(
-                pa.struct([
-                    pa.field("key", pa.string()),
-                    pa.field("value", pa.int64()),
-                ])
+    schema = pa.schema(
+        [
+            pa.field("event_at", pa.timestamp("us")),
+            pa.field(
+                "payload",
+                pa.struct(
+                    [
+                        pa.field("count", pa.int64()),
+                        pa.field("nested_at", pa.timestamp("us")),
+                    ]
+                ),
             ),
-        ),
-    ])
+            pa.field(
+                "tags",
+                pa.list_(
+                    pa.struct(
+                        [
+                            pa.field("key", pa.string()),
+                            pa.field("value", pa.int64()),
+                        ]
+                    )
+                ),
+            ),
+        ]
+    )
     container = ArrowRecordContainer(schema=schema)
 
     container.append(
@@ -408,7 +423,9 @@ def test_strict_coercion_policy_preserves_raw_values_until_arrow_validation() ->
 
 
 @pytest.mark.unit
-def test_flush_wraps_arrow_invalid_errors_with_field_context(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_flush_wraps_arrow_invalid_errors_with_field_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     container = ArrowRecordContainer(
         schema=pa.schema([pa.field("id", pa.int64())]),
     )
@@ -416,7 +433,7 @@ def test_flush_wraps_arrow_invalid_errors_with_field_context(monkeypatch: pytest
     original_array = pa.array
 
     def raising_array(*args: object, **kwargs: object) -> pa.Array:
-        raise pa.lib.ArrowInvalid("bad news")
+        raise pa.ArrowInvalid("bad news")
 
     monkeypatch.setattr(pa, "array", raising_array)
 
@@ -428,7 +445,9 @@ def test_flush_wraps_arrow_invalid_errors_with_field_context(monkeypatch: pytest
 
 
 @pytest.mark.unit
-def test_flush_wraps_unexpected_errors_with_field_context(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_flush_wraps_unexpected_errors_with_field_context(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     container = ArrowRecordContainer(
         schema=pa.schema([pa.field("id", pa.int64())]),
     )
