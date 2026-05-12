@@ -1,7 +1,8 @@
 from importlib import import_module
 from typing import Any, TYPE_CHECKING
 
-from . import definitions as _definitions
+# Import definitions module for registration side-effects.
+import_module(".definitions", __name__)
 
 # Lazy imports for all pool types and utilities to avoid circular dependencies and reduce initial load time
 if TYPE_CHECKING:
@@ -36,8 +37,27 @@ _EXPORTS: dict[str, str] = {
     "WeightedPool": ".weighted",
 }
 
-# __all__ is defined dynamically in __getattr__ to include all keys from _EXPORTS
-__all__ = list(_EXPORTS.keys())
+# Keep this explicit (instead of deriving from `_EXPORTS`) so static analysis tools
+# can recognize these imports as intentional re-exports.
+__all__ = [
+    "PoolType",
+    "PoolMeta",
+    "BasePool",
+    "register_pool",
+    "get_pool",
+    "all_pools",
+    "CompositePool",
+    "ConditionalPool",
+    "CounterPool",
+    "IPv4Pool",
+    "PortPool",
+    "NumericDistribution",
+    "NumericPool",
+    "generate_log_entry",
+    "format_log_line",
+    "TemporalPool",
+    "WeightedPool",
+]
 
 
 # Dynamic attribute access for lazy loading of pool classes and utilities

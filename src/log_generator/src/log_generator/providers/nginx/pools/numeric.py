@@ -2,7 +2,7 @@
 
 import random
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from .base import BasePool, PoolMeta
 
 
@@ -32,6 +32,17 @@ class NumericPool(BasePool):
     def __init__(self, meta: PoolMeta, distribution: NumericDistribution):
         super().__init__(meta)
         self.dist = distribution
+
+    @property
+    def kind(self) -> str:
+        """Backward-compatible alias for the configured distribution kind."""
+        return self.dist.kind
+
+    @kind.setter
+    def kind(self, value: str) -> None:
+        self.dist.kind = cast(
+            Literal["log_normal", "normal", "uniform", "exponential"], value
+        )
 
     def generate(self, context: dict[str, Any] | None = None) -> str:
         d = self.dist

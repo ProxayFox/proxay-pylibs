@@ -4,7 +4,6 @@ from ..base import PoolMeta, PoolType, register_pool
 from ..weighted import WeightedPool
 from ..numeric import NumericPool, NumericDistribution
 from ..network import IPv4Pool
-from ..composite import CompositePool
 
 # ─── $upstream_addr ───────────────────────────────────────────────
 register_pool(

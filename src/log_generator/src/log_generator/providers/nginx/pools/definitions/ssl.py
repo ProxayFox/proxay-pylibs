@@ -6,7 +6,6 @@ from ..base import PoolMeta, PoolType, register_pool
 from ..composite import CompositePool
 from ..weighted import WeightedPool
 from ..conditional import ConditionalPool
-from ..numeric import NumericPool, NumericDistribution
 
 
 _HEX_DIGITS = "0123456789abcdef"

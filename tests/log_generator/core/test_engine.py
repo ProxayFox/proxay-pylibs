@@ -9,7 +9,7 @@ import pytest
 
 from log_generator.core import LogEngine, get_provider
 from log_generator.providers.nginx import DEFAULT_FORMAT, JSON_FORMAT
-from tests.providers.nginx._nginx_test_helpers import (
+from ..providers.nginx._nginx_test_helpers import (
     FIXED_TIMESTAMP,
     assert_no_unresolved_placeholders,
     assert_stable_shape,

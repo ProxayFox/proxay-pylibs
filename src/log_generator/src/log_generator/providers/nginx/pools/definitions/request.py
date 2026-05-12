@@ -3,7 +3,6 @@
 from ..base import PoolMeta, PoolType, register_pool
 from ..weighted import WeightedPool
 from ..composite import CompositePool
-from ..numeric import NumericPool, NumericDistribution
 import uuid
 from typing import Any
 

@@ -12,7 +12,7 @@ from log_generator.core import (
 )
 from log_generator.core.base import BaseProvider
 from log_generator.providers import basic, nginx
-from tests.providers.nginx._nginx_test_helpers import (
+from ..providers.nginx._nginx_test_helpers import (
     FIXED_TIMESTAMP,
     assert_no_unresolved_placeholders,
 )

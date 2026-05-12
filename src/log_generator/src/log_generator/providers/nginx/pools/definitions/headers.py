@@ -61,8 +61,7 @@ register_pool(
             "+http://www.google.com/bot.html)": 0.05,
             "Mozilla/5.0 (compatible; bingbot/2.0; "
             "+http://www.bing.com/bingbot.htm)": 0.03,
-            "Mozilla/5.0 (compatible; AhrefsBot/7.0; "
-            "+http://ahrefs.com/robot/)": 0.02,
+            "Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)": 0.02,
             # Programmatic
             "curl/8.5.0": 0.03,
             "python-requests/2.31.0": 0.03,

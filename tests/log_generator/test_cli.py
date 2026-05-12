@@ -11,7 +11,7 @@ import pytest
 
 import log_generator.cli as cli_module
 from log_generator.cli import main
-from tests.providers.nginx._nginx_test_helpers import UNRESOLVED_VARIABLE_PATTERN
+from .providers.nginx._nginx_test_helpers import UNRESOLVED_VARIABLE_PATTERN
 
 
 @pytest.mark.unit

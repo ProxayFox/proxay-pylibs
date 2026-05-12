@@ -119,8 +119,9 @@ def test_numeric_pool_covers_int_and_unknown_distribution_paths() -> None:
 
     bad_pool = NumericPool(
         _meta("$bad", PoolType.NUMERIC),
-        NumericDistribution(kind="mystery"),  # type: ignore[arg-type]
+        NumericDistribution(kind="uniform", low=0.0, high=1.0),
     )
+    setattr(bad_pool, "kind", "mystery")
     with pytest.raises(ValueError, match="Unknown distribution"):
         bad_pool.generate()
 
