@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Mapping, get_args
+from typing import Any, Mapping, cast, get_args
 
 import pyarrow as pa
 import pytest
@@ -29,6 +29,17 @@ def test_constructor_rejects_cached_table_with_mismatched_schema() -> None:
 
 
 @pytest.mark.unit
+def test_constructor_adopts_cached_table_schema_in_inferred_mode() -> None:
+    cached = pa.Table.from_pydict({"id": [10]}, schema=pa.schema([pa.field("id", pa.int64())]))
+    container = ArrowRecordContainer(schema=None, table=cached)
+
+    container.append({"id": 11, "name": "beta"})
+
+    assert container.schema is not None
+    assert container.to_table().to_pydict() == {"id": [10, 11], "name": [None, "beta"]}
+
+
+@pytest.mark.unit
 def test_append_materializes_rows_into_an_arrow_table() -> None:
     container = ArrowRecordContainer(
         schema=pa.schema(
@@ -48,6 +59,268 @@ def test_append_materializes_rows_into_an_arrow_table() -> None:
     assert table.num_rows == 2
     assert table.column("id").to_pylist() == [1, 2]
     assert table.column("name").to_pylist() == ["alpha", "beta"]
+
+
+@pytest.mark.unit
+def test_inferred_mode_learns_schema_from_first_record() -> None:
+    container = ArrowRecordContainer(schema=None)
+
+    container.append({"id": 1, "name": "alpha"})
+
+    assert container.schema is not None
+    assert container.to_table().to_pydict() == {"id": [1], "name": ["alpha"]}
+
+
+@pytest.mark.unit
+def test_inferred_mode_widens_schema_and_backfills_missing_rows() -> None:
+    container = ArrowRecordContainer(schema=None, batch_size=1)
+
+    container.append({"id": 1})
+    container.append({"id": 2, "name": "beta"})
+
+    assert container.to_table().to_pydict() == {"id": [1, 2], "name": [None, "beta"]}
+
+
+@pytest.mark.unit
+def test_inferred_mode_raises_when_materializing_without_schema_or_rows() -> None:
+    container = ArrowRecordContainer(schema=None)
+
+    with pytest.raises(ValueError, match="without a schema or appended records"):
+        container.to_table()
+
+
+@pytest.mark.unit
+def test_inferred_mode_falls_back_to_string_for_conflicting_types() -> None:
+    container = ArrowRecordContainer(schema=None)
+
+    container.append({"value": 1})
+    container.append({"value": {"nested": True}})
+
+    assert container.to_table().to_pydict() == {"value": ["1", "{'nested': True}"]}
+
+
+@pytest.mark.unit
+def test_inferred_mode_reuses_first_seen_column_name_case_insensitively() -> None:
+    container = ArrowRecordContainer(schema=None, case_insensitive_keys=True)
+
+    container.append({"ID": 1})
+    container.append({"id": 2})
+
+    assert container.schema is not None
+    assert container.schema.names == ["ID"]
+    assert container.to_table().column("ID").to_pylist() == [1, 2]
+
+
+@pytest.mark.unit
+def test_inferred_mode_missing_policy_applies_to_existing_columns() -> None:
+    container = ArrowRecordContainer(schema=None, missing_field_policy="error")
+
+    container.append({"id": 1, "name": "alpha"})
+
+    with pytest.raises(ValueError, match="Missing required schema field 'name'"):
+        container.append({"id": 2})
+
+
+@pytest.mark.unit
+def test_inferred_mode_rejects_empty_first_record() -> None:
+    container = ArrowRecordContainer(schema=None)
+
+    with pytest.raises(ValueError, match="Cannot infer schema from an empty record"):
+        container.append({})
+
+
+@pytest.mark.unit
+def test_inferred_mode_adopts_schema_from_batches() -> None:
+    batch = pa.RecordBatch.from_arrays([pa.array([1], type=pa.int64())], names=["id"])
+    container = ArrowRecordContainer(schema=None, batches=[batch])
+
+    container.append({"id": 2})
+
+    assert container.schema is not None
+    assert container.to_table().column("id").to_pylist() == [1, 2]
+
+
+@pytest.mark.unit
+def test_inferred_mode_realigns_previous_batches_after_type_widening() -> None:
+    container = ArrowRecordContainer(schema=None, batch_size=1)
+
+    container.append({"value": {"nested": True}})
+    container.append({"value": "flat", "extra": "beta"})
+
+    assert container.to_table().to_pydict() == {
+        "value": ["{'nested': True}", "flat"],
+        "extra": [None, "beta"],
+    }
+
+
+@pytest.mark.unit
+def test_inferred_mode_realigns_cached_table_after_type_widening() -> None:
+    cached = pa.Table.from_pydict(
+        {"value": [{"nested": True}]},
+        schema=pa.schema(
+            [
+                pa.field(
+                    "value",
+                    pa.struct([pa.field("nested", pa.bool_())]),
+                )
+            ]
+        ),
+    )
+    container = ArrowRecordContainer(schema=None, table=cached)
+
+    container.append({"value": "flat"})
+
+    assert container.to_table().to_pydict() == {"value": ["{'nested': True}", "flat"]}
+
+
+@pytest.mark.unit
+def test_inferred_mode_reset_clears_inferred_schema() -> None:
+    container = ArrowRecordContainer(schema=None)
+    container.append({"id": 1})
+
+    container.reset()
+
+    assert container.schema is None
+    with pytest.raises(ValueError, match="without a schema or appended records"):
+        container.to_table()
+
+
+@pytest.mark.unit
+def test_incremental_flush_raises_for_empty_inferred_container_when_forced() -> None:
+    container = ArrowRecordContainer(schema=None)
+
+    with pytest.raises(ValueError, match="without a schema or appended records"):
+        container.incremental_flush(threshold=-1)
+
+
+@pytest.mark.unit
+def test_inferred_mode_allows_missing_fields_as_nulls_after_schema_is_learned() -> None:
+    container = ArrowRecordContainer(schema=None)
+
+    container.append({"id": 1, "name": "alpha"})
+    container.append({"id": 2})
+
+    assert container.to_table().to_pydict() == {"id": [1, 2], "name": ["alpha", None]}
+
+
+@pytest.mark.unit
+def test_inferred_helper_methods_cover_additional_type_paths() -> None:
+    container = ArrowRecordContainer(schema=None, case_insensitive_keys=False)
+    event_at = datetime(2024, 1, 2, 3, 4, 5)
+    struct_type = pa.struct([pa.field("event_at", pa.timestamp("us"))])
+    list_type = pa.list_(pa.int64())
+
+    container.append({"id": 1})
+    container._rebuild_accumulator_for_schema(
+        pa.schema([pa.field("id", pa.int64()), pa.field("name", pa.string())])
+    )
+
+    assert container._accumulator["name"] == [None]
+    assert container._canonicalize_inferred_key("Name") == "Name"
+    assert ArrowRecordContainer._coerce_inferred_value(None, pa.int64()) is None
+    assert ArrowRecordContainer._coerce_inferred_value("raw", struct_type) == "raw"
+    assert ArrowRecordContainer._coerce_inferred_value(
+        {"event_at": "2024-01-02T03:04:05Z"},
+        struct_type,
+    ) == {"event_at": event_at}
+    assert ArrowRecordContainer._coerce_inferred_value("raw", list_type) == "raw"
+    assert ArrowRecordContainer._coerce_inferred_value([1, 2], list_type) == [1, 2]
+
+    assert ArrowRecordContainer._infer_arrow_type(None).equals(pa.null())
+    assert ArrowRecordContainer._infer_arrow_type(1.5).equals(pa.float64())
+    assert ArrowRecordContainer._infer_arrow_type(event_at).equals(pa.timestamp("us"))
+    assert ArrowRecordContainer._infer_arrow_type(b"x").equals(pa.binary())
+    assert pa.types.is_struct(ArrowRecordContainer._infer_arrow_type({"count": 1}))
+    inferred_list_type = ArrowRecordContainer._infer_arrow_type([1, 2.5])
+    assert pa.types.is_list(inferred_list_type)
+    assert cast(pa.DataType, inferred_list_type.value_type).equals(pa.float64())
+
+    merged_struct_fields = ArrowRecordContainer._merge_struct_fields(
+        pa.struct([pa.field("count", pa.int64())]),
+        pa.struct(
+            [
+                pa.field("count", pa.float64()),
+                pa.field("name", pa.string()),
+            ]
+        ),
+    )
+    assert [field.name for field in merged_struct_fields] == ["count", "name"]
+    assert merged_struct_fields[0].type.equals(pa.float64())
+
+    assert ArrowRecordContainer._merge_arrow_types(pa.null(), pa.int64()).equals(pa.int64())
+    assert ArrowRecordContainer._merge_arrow_types(pa.int64(), pa.null()).equals(pa.int64())
+    assert ArrowRecordContainer._merge_arrow_types(pa.string(), pa.int64()).equals(pa.string())
+    assert ArrowRecordContainer._merge_arrow_types(pa.bool_(), pa.bool_()).equals(pa.bool_())
+    assert ArrowRecordContainer._merge_arrow_types(pa.int32(), pa.int64()).equals(pa.int64())
+    assert ArrowRecordContainer._merge_arrow_types(pa.int64(), pa.float64()).equals(pa.float64())
+    assert ArrowRecordContainer._merge_arrow_types(pa.binary(), pa.binary()).equals(pa.binary())
+    assert ArrowRecordContainer._merge_arrow_types(
+        pa.timestamp("us"), pa.timestamp("us")
+    ).equals(pa.timestamp("us"))
+    assert ArrowRecordContainer._merge_arrow_types(
+        pa.list_(pa.int64()), pa.list_(pa.float64())
+    ).equals(pa.list_(pa.float64()))
+    merged_struct = ArrowRecordContainer._merge_arrow_types(
+        pa.struct([pa.field("count", pa.int64())]),
+        pa.struct([pa.field("count", pa.float64())]),
+    )
+    assert pa.types.is_struct(merged_struct)
+    assert merged_struct.field("count").type.equals(pa.float64())
+    assert ArrowRecordContainer._merge_arrow_types(pa.bool_(), pa.binary()).equals(pa.string())
+
+
+@pytest.mark.unit
+def test_inferred_alignment_helpers_cover_cast_and_realignment_paths() -> None:
+    container = ArrowRecordContainer(schema=None)
+    source_type = pa.struct([pa.field("nested", pa.bool_())])
+    source_array = pa.array([{"nested": True}], type=source_type)
+    source_batch = pa.RecordBatch.from_arrays([source_array], names=["value"])
+    target_schema = pa.schema(
+        [
+            pa.field("value", pa.string()),
+            pa.field("extra", pa.int64()),
+        ]
+    )
+
+    same_array = pa.array([1], type=pa.int64())
+    assert container._cast_array_to_type(same_array, pa.int64()) is same_array
+    assert container._cast_array_to_type(pa.array([None]), pa.int64()).to_pylist() == [None]
+    assert container._cast_array_to_type(source_array, pa.string()).to_pylist() == ["{'nested': True}"]
+
+    same_column = pa.chunked_array([pa.array([1], type=pa.int64())])
+    assert container._cast_column_to_type(same_column, pa.int64()) is same_column
+
+    empty_column = pa.chunked_array([], type=pa.int64())
+    assert container._cast_column_to_type(empty_column, pa.string()).to_pylist() == []
+
+    aligned_batch = container._align_batch_to_schema(source_batch, target_schema)
+    assert aligned_batch.to_pydict() == {"value": ["{'nested': True}"], "extra": [None]}
+
+    source_table = pa.Table.from_batches([source_batch])
+    aligned_table = container._align_table_to_schema(source_table, target_schema)
+    assert aligned_table.to_pydict() == {"value": ["{'nested': True}"], "extra": [None]}
+    assert container._align_table_to_schema(aligned_table, target_schema) is aligned_table
+
+    container._align_materialized_state_to_schema()
+
+    container.schema = target_schema
+    container._refresh_schema_cache()
+    container.table = source_table
+    container.batches = [source_batch]
+    container._align_materialized_state_to_schema()
+
+    assert container.table is not None
+    assert container.table.to_pydict() == {"value": ["{'nested': True}"], "extra": [None]}
+    assert container.batches[0].to_pydict() == {"value": ["{'nested': True}"], "extra": [None]}
+
+
+@pytest.mark.unit
+def test_flush_raises_when_rows_exist_without_any_schema() -> None:
+    container = ArrowRecordContainer(schema=None)
+    container._current_count = 1
+
+    with pytest.raises(ValueError, match="without an explicit or inferred schema"):
+        container.flush()
 
 
 @pytest.mark.unit
