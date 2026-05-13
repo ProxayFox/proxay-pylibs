@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=69", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["uv_build >= 0.11.7, <0.12.0"]
+build-backend = "uv_build"
 
 [project]
 name = "http-to-arrow"
@@ -14,6 +14,10 @@ dependencies = [
     "polars>=1.39.3",
     "pyarrow>=23.0.1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ProxayFox/proxay-pylibs/tree/main/src/http_to_arrow"
+Issues = "https://github.com/ProxayFox/proxay-pylibs/issues"
 
 [tool.setuptools]
 package-dir = { "http_to_arrow" = "." }

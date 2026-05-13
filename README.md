@@ -108,3 +108,25 @@ When you add a new reusable library:
 4. Put runtime package code under `src/<member>/src/<import_package>/`.
 5. Put package-specific tests under `src/<member>/tests/`.
 6. Update this README if the new package should be discoverable by other users.
+
+## Releasing packages
+
+Each package in this monorepo is released independently using namespaced GitHub
+Releases and a dedicated publish workflow.
+
+### http-to-arrow
+
+The `.github/workflows/publish-http-to-arrow.yml` workflow publishes the
+`http-to-arrow` package to PyPI when a GitHub Release is published with a tag
+that follows the `http-to-arrow-vX.Y.Z` naming convention
+(e.g. `http-to-arrow-v0.1.0`).
+
+### Release checklist
+
+1. Update the `version` field in `src/http_to_arrow/pyproject.toml` to the new
+   semantic version.
+2. Commit and push that change.
+3. Create a GitHub Release with tag `http-to-arrow-vX.Y.Z` where `X.Y.Z`
+   matches the version set in the previous step.
+4. Publish the release. The workflow runs automatically and will fail fast if
+   the tag version and the pyproject.toml version do not match.

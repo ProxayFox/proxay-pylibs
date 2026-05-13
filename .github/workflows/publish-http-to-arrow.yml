@@ -1,0 +1,118 @@
+# Publishes the http-to-arrow workspace member to PyPI.
+#
+# Trigger: a GitHub Release is published whose tag begins with "http-to-arrow-v"
+# (e.g. http-to-arrow-v0.1.0). The tag's semantic version must match the
+# version field in src/http_to_arrow/pyproject.toml; the workflow fails fast if
+# they disagree.
+#
+# Authentication: PyPI trusted publishing via OIDC — no stored API token is
+# needed. You must configure a matching trusted publisher on PyPI under the
+# project's Publishing settings before the first release.
+#
+# Job structure:
+#   build-and-verify  — checkout, lint, test, build, upload dist artifact
+#   publish           — download artifact, publish to PyPI (id-token: write only here)
+
+name: Publish http-to-arrow to PyPI
+
+on:
+  release:
+    types: [published]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build-and-verify:
+    name: Build and verify
+    runs-on: ubuntu-latest
+    # Only run when this release is for the http-to-arrow package.
+    if: startsWith(github.event.release.tag_name, 'http-to-arrow-v')
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Sync workspace dev environment
+        run: uv sync --all-packages --extra dev
+
+      - name: Verify release tag matches package version
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          TAG_VERSION="${TAG#http-to-arrow-v}"
+          PKG_VERSION=$(python -c "
+          import tomllib
+          with open('src/http_to_arrow/pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['project']['version'])
+          ")
+          echo "Release tag version : $TAG_VERSION"
+          echo "Package version     : $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Release tag version ($TAG_VERSION) does not match package version ($PKG_VERSION). Update src/http_to_arrow/pyproject.toml before releasing."
+            exit 1
+          fi
+
+      - name: Lint
+        run: uv run ruff check src/http_to_arrow tests/http_to_arrow
+
+      - name: Format check
+        run: uv run ruff format --check src/http_to_arrow tests/http_to_arrow
+
+      - name: Type check
+        run: |
+          uv run ty check --project src/http_to_arrow
+          uvx pyright \
+            --pythonpath "$(uv run python -c 'import sys; print(sys.executable)')" \
+            --threads \
+            src/http_to_arrow
+
+      - name: Test
+        run: uv run pytest -q tests/http_to_arrow
+
+      - name: Build distributions
+        run: uv build src/http_to_arrow
+
+      - name: Verify distributions
+        run: uvx twine check src/http_to_arrow/dist/*
+
+      - name: Upload distributions as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: http-to-arrow-dist
+          path: src/http_to_arrow/dist/
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: build-and-verify
+    environment:
+      name: pypi
+      url: https://pypi.org/p/http-to-arrow
+    permissions:
+      # Required for PyPI trusted publishing (OIDC). Keep this only in the
+      # publish job, not in the build job, to limit the blast radius of any
+      # compromise in the build/test environment.
+      id-token: write
+
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: http-to-arrow-dist
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
