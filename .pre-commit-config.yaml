@@ -1,0 +1,13 @@
+# Pre-commit hooks — runs `just quality` as the single quality gate.
+# Install with: just hooks-install
+
+repos:
+  - repo: local
+    hooks:
+      - id: quality-gate
+        name: quality gate (lint, format, typecheck, test)
+        entry: just quality
+        language: system
+        always_run: true
+        pass_filenames: false
+        stages: [pre-commit]

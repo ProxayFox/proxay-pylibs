@@ -25,7 +25,7 @@ class ArrowRecordContainer:
         default=None,
         doc="PyArrow schema for the container data, or None to infer it from records.",
     )
-    
+
     table: pa.Table | None = field(
         default=None,
         init=True,
@@ -73,7 +73,9 @@ class ArrowRecordContainer:
     )
     _uses_default_normalizer: bool = field(default=False, init=False, repr=False)
     _schema_explicit: bool = field(default=False, init=False, repr=False)
-    _inferred_name_map: dict[str, str] = field(default_factory=dict, init=False, repr=False)
+    _inferred_name_map: dict[str, str] = field(
+        default_factory=dict, init=False, repr=False
+    )
     _accumulator: dict[str, list] = field(default_factory=dict, init=False, repr=False)
     _current_count: int = field(default=0, init=False, repr=False)
     _pending_batch_rows: int = field(default=0, init=False, repr=False)
@@ -111,7 +113,8 @@ class ArrowRecordContainer:
             arrow_field.name for arrow_field in self._schema_fields
         )
         self._inferred_name_map = {
-            arrow_field.name.lower(): arrow_field.name for arrow_field in self._schema_fields
+            arrow_field.name.lower(): arrow_field.name
+            for arrow_field in self._schema_fields
         }
 
     def _init_accumulator(self) -> None:
@@ -165,7 +168,7 @@ class ArrowRecordContainer:
 
         try:
             parsed = datetime.fromisoformat(iso_value)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             return None
 
         if parsed.tzinfo is not None:
@@ -275,7 +278,9 @@ class ArrowRecordContainer:
         if isinstance(value, list):
             item_type = pa.null()
             for item in value:
-                item_type = cls._merge_arrow_types(item_type, cls._infer_arrow_type(item))
+                item_type = cls._merge_arrow_types(
+                    item_type, cls._infer_arrow_type(item)
+                )
             return pa.list_(item_type)
 
         return pa.string()
@@ -285,22 +290,22 @@ class ArrowRecordContainer:
         cls, existing: pa.StructType, observed: pa.StructType
     ) -> list[pa.Field]:
         """Merge struct members while preserving first-seen order."""
-        ordered_names = [field.name for field in existing]
+        ordered_names = [f.name for f in existing]
         merged_fields: dict[str, pa.Field] = {
-            field.name: pa.field(field.name, field.type) for field in existing
+            f.name: pa.field(f.name, f.type) for f in existing
         }
 
-        for field in observed:
-            if field.name in merged_fields:
+        for f in observed:
+            if f.name in merged_fields:
                 merged_type = cls._merge_arrow_types(
-                    merged_fields[field.name].type,
-                    field.type,
+                    merged_fields[f.name].type,
+                    f.type,
                 )
-                merged_fields[field.name] = pa.field(field.name, merged_type)
+                merged_fields[f.name] = pa.field(f.name, merged_type)
                 continue
 
-            ordered_names.append(field.name)
-            merged_fields[field.name] = pa.field(field.name, field.type)
+            ordered_names.append(f.name)
+            merged_fields[f.name] = pa.field(f.name, f.type)
 
         return [merged_fields[name] for name in ordered_names]
 
@@ -327,9 +332,8 @@ class ArrowRecordContainer:
         if pa.types.is_integer(existing) and pa.types.is_integer(observed):
             return pa.int64()
 
-        if (
-            (pa.types.is_integer(existing) or pa.types.is_floating(existing))
-            and (pa.types.is_integer(observed) or pa.types.is_floating(observed))
+        if (pa.types.is_integer(existing) or pa.types.is_floating(existing)) and (
+            pa.types.is_integer(observed) or pa.types.is_floating(observed)
         ):
             return pa.float64()
 
@@ -339,9 +343,8 @@ class ArrowRecordContainer:
         if pa.types.is_timestamp(existing) and pa.types.is_timestamp(observed):
             return pa.timestamp("us")
 
-        if (
-            (pa.types.is_list(existing) or pa.types.is_large_list(existing))
-            and (pa.types.is_list(observed) or pa.types.is_large_list(observed))
+        if (pa.types.is_list(existing) or pa.types.is_large_list(existing)) and (
+            pa.types.is_list(observed) or pa.types.is_large_list(observed)
         ):
             return pa.list_(
                 cls._merge_arrow_types(
@@ -359,7 +362,8 @@ class ArrowRecordContainer:
         """Grow or widen the inferred schema to accommodate *record*."""
         ordered_names = [field.name for field in self._schema_fields]
         fields_by_name: dict[str, pa.Field] = {
-            field.name: pa.field(field.name, field.type) for field in self._schema_fields
+            field.name: pa.field(field.name, field.type)
+            for field in self._schema_fields
         }
         schema_changed = False
 
@@ -383,7 +387,9 @@ class ArrowRecordContainer:
                 pa.schema([fields_by_name[name] for name in ordered_names])
             )
 
-    def _cast_array_to_type(self, array: pa.Array, target_type: pa.DataType) -> pa.Array:
+    def _cast_array_to_type(
+        self, array: pa.Array, target_type: pa.DataType
+    ) -> pa.Array:
         """Cast an Arrow array to *target_type*, falling back to Python-level conversion."""
         if array.type.equals(target_type):
             return array
@@ -393,9 +399,12 @@ class ArrowRecordContainer:
 
         try:
             return array.cast(target_type)
-        except (NotImplementedError, TypeError, ValueError, pa.ArrowInvalid):
+        except NotImplementedError, TypeError, ValueError, pa.ArrowInvalid:
             return pa.array(
-                [self._coerce_inferred_value(value, target_type) for value in array.to_pylist()],
+                [
+                    self._coerce_inferred_value(value, target_type)
+                    for value in array.to_pylist()
+                ],
                 type=target_type,
                 from_pandas=False,
             )
@@ -408,7 +417,9 @@ class ArrowRecordContainer:
             return column
 
         if not column.chunks:
-            return pa.chunked_array([pa.array([], type=target_type)],)
+            return pa.chunked_array(
+                [pa.array([], type=target_type)],
+            )
 
         return pa.chunked_array(
             [self._cast_array_to_type(chunk, target_type) for chunk in column.chunks]
@@ -467,7 +478,8 @@ class ArrowRecordContainer:
 
         if any(not batch.schema.equals(self.schema) for batch in self.batches):
             self.batches = [
-                self._align_batch_to_schema(batch, self.schema) for batch in self.batches
+                self._align_batch_to_schema(batch, self.schema)
+                for batch in self.batches
             ]
 
     def _resolve_field_key(
@@ -617,7 +629,9 @@ class ArrowRecordContainer:
             return
 
         if self.schema is None:
-            raise ValueError("Cannot flush records without an explicit or inferred schema.")
+            raise ValueError(
+                "Cannot flush records without an explicit or inferred schema."
+            )
 
         arrays: list[pa.Array] = []
         for arrow_field in self._schema_fields:

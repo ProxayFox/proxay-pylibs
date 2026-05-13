@@ -30,7 +30,9 @@ def test_constructor_rejects_cached_table_with_mismatched_schema() -> None:
 
 @pytest.mark.unit
 def test_constructor_adopts_cached_table_schema_in_inferred_mode() -> None:
-    cached = pa.Table.from_pydict({"id": [10]}, schema=pa.schema([pa.field("id", pa.int64())]))
+    cached = pa.Table.from_pydict(
+        {"id": [10]}, schema=pa.schema([pa.field("id", pa.int64())])
+    )
     container = ArrowRecordContainer(schema=None, table=cached)
 
     container.append({"id": 11, "name": "beta"})
@@ -247,13 +249,27 @@ def test_inferred_helper_methods_cover_additional_type_paths() -> None:
     assert [field.name for field in merged_struct_fields] == ["count", "name"]
     assert merged_struct_fields[0].type.equals(pa.float64())
 
-    assert ArrowRecordContainer._merge_arrow_types(pa.null(), pa.int64()).equals(pa.int64())
-    assert ArrowRecordContainer._merge_arrow_types(pa.int64(), pa.null()).equals(pa.int64())
-    assert ArrowRecordContainer._merge_arrow_types(pa.string(), pa.int64()).equals(pa.string())
-    assert ArrowRecordContainer._merge_arrow_types(pa.bool_(), pa.bool_()).equals(pa.bool_())
-    assert ArrowRecordContainer._merge_arrow_types(pa.int32(), pa.int64()).equals(pa.int64())
-    assert ArrowRecordContainer._merge_arrow_types(pa.int64(), pa.float64()).equals(pa.float64())
-    assert ArrowRecordContainer._merge_arrow_types(pa.binary(), pa.binary()).equals(pa.binary())
+    assert ArrowRecordContainer._merge_arrow_types(pa.null(), pa.int64()).equals(
+        pa.int64()
+    )
+    assert ArrowRecordContainer._merge_arrow_types(pa.int64(), pa.null()).equals(
+        pa.int64()
+    )
+    assert ArrowRecordContainer._merge_arrow_types(pa.string(), pa.int64()).equals(
+        pa.string()
+    )
+    assert ArrowRecordContainer._merge_arrow_types(pa.bool_(), pa.bool_()).equals(
+        pa.bool_()
+    )
+    assert ArrowRecordContainer._merge_arrow_types(pa.int32(), pa.int64()).equals(
+        pa.int64()
+    )
+    assert ArrowRecordContainer._merge_arrow_types(pa.int64(), pa.float64()).equals(
+        pa.float64()
+    )
+    assert ArrowRecordContainer._merge_arrow_types(pa.binary(), pa.binary()).equals(
+        pa.binary()
+    )
     assert ArrowRecordContainer._merge_arrow_types(
         pa.timestamp("us"), pa.timestamp("us")
     ).equals(pa.timestamp("us"))
@@ -266,7 +282,9 @@ def test_inferred_helper_methods_cover_additional_type_paths() -> None:
     )
     assert pa.types.is_struct(merged_struct)
     assert merged_struct.field("count").type.equals(pa.float64())
-    assert ArrowRecordContainer._merge_arrow_types(pa.bool_(), pa.binary()).equals(pa.string())
+    assert ArrowRecordContainer._merge_arrow_types(pa.bool_(), pa.binary()).equals(
+        pa.string()
+    )
 
 
 @pytest.mark.unit
@@ -284,8 +302,12 @@ def test_inferred_alignment_helpers_cover_cast_and_realignment_paths() -> None:
 
     same_array = pa.array([1], type=pa.int64())
     assert container._cast_array_to_type(same_array, pa.int64()) is same_array
-    assert container._cast_array_to_type(pa.array([None]), pa.int64()).to_pylist() == [None]
-    assert container._cast_array_to_type(source_array, pa.string()).to_pylist() == ["{'nested': True}"]
+    assert container._cast_array_to_type(pa.array([None]), pa.int64()).to_pylist() == [
+        None
+    ]
+    assert container._cast_array_to_type(source_array, pa.string()).to_pylist() == [
+        "{'nested': True}"
+    ]
 
     same_column = pa.chunked_array([pa.array([1], type=pa.int64())])
     assert container._cast_column_to_type(same_column, pa.int64()) is same_column
@@ -299,7 +321,9 @@ def test_inferred_alignment_helpers_cover_cast_and_realignment_paths() -> None:
     source_table = pa.Table.from_batches([source_batch])
     aligned_table = container._align_table_to_schema(source_table, target_schema)
     assert aligned_table.to_pydict() == {"value": ["{'nested': True}"], "extra": [None]}
-    assert container._align_table_to_schema(aligned_table, target_schema) is aligned_table
+    assert (
+        container._align_table_to_schema(aligned_table, target_schema) is aligned_table
+    )
 
     container._align_materialized_state_to_schema()
 
@@ -310,8 +334,14 @@ def test_inferred_alignment_helpers_cover_cast_and_realignment_paths() -> None:
     container._align_materialized_state_to_schema()
 
     assert container.table is not None
-    assert container.table.to_pydict() == {"value": ["{'nested': True}"], "extra": [None]}
-    assert container.batches[0].to_pydict() == {"value": ["{'nested': True}"], "extra": [None]}
+    assert container.table.to_pydict() == {
+        "value": ["{'nested': True}"],
+        "extra": [None],
+    }
+    assert container.batches[0].to_pydict() == {
+        "value": ["{'nested': True}"],
+        "extra": [None],
+    }
 
 
 @pytest.mark.unit
