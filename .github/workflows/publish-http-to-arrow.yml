@@ -82,7 +82,7 @@ jobs:
         run: uv run pytest -q tests/http_to_arrow
 
       - name: Build distributions
-        run: uv build src/http_to_arrow
+        run: uv build src/http_to_arrow --out-dir src/http_to_arrow/dist/
 
       - name: Verify distributions
         run: uvx twine check src/http_to_arrow/dist/*
