@@ -17,7 +17,8 @@
 	"postStartCommand": "uv sync --all-packages --all-groups",
 	"features": {
 		"ghcr.io/devcontainer-community/devcontainer-features/astral.sh-uv:1": {},
-		"ghcr.io/devcontainers/features/node:2.0.0": {}
+		"ghcr.io/devcontainers/features/node:2.0.0": {},
+		"ghcr.io/devcontainers/features/github-cli:1": {}
 	},
 	"customizations": {
 		"vscode": {
