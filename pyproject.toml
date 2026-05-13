@@ -15,6 +15,7 @@ dependencies = []
 # ──────────────────────────────────────────────
 [tool.uv.workspace]
 members = ["src/*"]
+exclude = ["src/*.egg-info"]
 
 [tool.uv.sources]
 http_to_arrow = { workspace = true }

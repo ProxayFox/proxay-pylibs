@@ -1,6 +1,6 @@
 [build-system]
-requires = ["hatchling>=1.27.0"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "http-to-arrow"
@@ -15,5 +15,5 @@ dependencies = [
     "pyarrow>=23.0.1",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/http_to_arrow"]
+[tool.setuptools]
+package-dir = { "http_to_arrow" = "." }
