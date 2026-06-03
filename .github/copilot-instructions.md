@@ -13,6 +13,16 @@
 - Treat `python_template.egg-info/` as leftover template output, not an
  authoritative package location.
 
+## Customization Surface
+
+- Keep this file concise and always-on. Put package- or task-specific guidance
+ in `.github/instructions/*.instructions.md` with focused `applyTo` patterns.
+- Existing package instructions cover `http_to_arrow` and `log_generator`; let
+ those files drive package-specific anchors, validation paths, and pitfalls.
+- Prefer linking to the root [README.md](../README.md), package READMEs,
+ [templates/python-package/README.md](../templates/python-package/README.md),
+ and prompt files instead of copying their procedural detail here.
+
 ## Package Layout
 
 - Follow the standard member shape from
@@ -54,6 +64,9 @@
 - The root pytest defaults currently include coverage for `http_to_arrow`, so
  package-specific coverage checks may need a narrower command when working on
  other members.
+- When editing `log_generator` or a new package, check that member's
+ `pyproject.toml` for coverage configuration before assuming the root coverage
+ gate applies.
 
 ## Working In This Repository
 

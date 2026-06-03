@@ -8,6 +8,16 @@ default:
 help:
     @just --list
 
+# --- Package Management ---
+sync +args="":
+    uv sync --all-groups --all-packages {{args}}
+
+check-vulns:
+    uv export --frozen --no-hashes --no-editable --no-emit-project | uvx pip-audit -r /dev/stdin
+
+upgrade-deps:
+    uvx uv-upgrade
+
 # --- Development ---
 lint path="." +args="":
     uv run ruff check {{path}} {{args}}
@@ -21,6 +31,10 @@ format path="." +args="":
 format-check path="." +args="":
     uv run ruff format --check {{path}} {{args}}
 
+typecheck path="." +args="":
+    uv run ty check --project {{path}} {{args}}
+    uvx pyright --pythonpath "$(uv run python -c 'import sys; print(sys.executable)')" --threads {{path}}
+
 #  --- Testing ---
 test path="tests/" +args="":
     uv run pytest -q {{path}} {{args}}
@@ -28,9 +42,15 @@ test path="tests/" +args="":
 test-all path="tests/" +args="":
     uv run pytest --runslow -q {{path}} {{args}}
 
-typecheck path="." +args="":
-    uv run ty check --project {{path}} {{args}}
-    uvx pyright --pythonpath "$(uv run python -c 'import sys; print(sys.executable)')" --threads
+coverage path="tests/" +args="":
+    uv run pytest -q {{path}} --skip-integration --cov=mde_client --cov-branch --cov-report=term-missing --cov-report=html:build/htmlcov {{args}}
+
+# --- Quality CI/CD Gate ---
+quality: sync
+    if ! just lint; then just lint-fix; fi
+    if ! just format-check; then just format; fi
+    just typecheck
+    just test --skip-integration
 
 # --- Git Hooks ---
 hooks-install:
@@ -38,13 +58,6 @@ hooks-install:
 
 hooks-run +args="":
     uv run pre-commit run --all-files {{args}}
-
-# --- Quality CI/CD Gate ---
-quality:
-    if ! just lint; then just lint-fix; fi
-    if ! just format-check; then just format; fi
-    just typecheck
-    uv run pytest -q tests/ -m "not integration"
 
 # Similar to Quality, but only targets schema validation
 quality-schema schemas="src/mde_client/schemas" models="src/mde_client/models" schemas_tests="tests/mde_client/test_schema_validator.py" models_tests="tests/mde_client/test_investigation_models.py":
