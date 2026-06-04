@@ -98,3 +98,8 @@ profile-http-to-arrow-pyinstrument rows="1000000" out="profiles/http_to_arrow/py
 # Compare current branch against another git ref (default origin/main) using a temporary worktree.
 profile-http-to-arrow-vs ref="origin/main" rows="1000000" +args="":
     uv run --group profiling python scripts/compare_http_to_arrow.py --ref {{ref}} --rows {{rows}} {{args}}
+
+# Run the http_to_arrow profiler across the full configuration matrix (5 configs x 3 scenarios)
+# against another git ref and emit benchmarks/http_to_arrow/COMPARISON_MATRIX.md (+ .csv).
+profile-http-to-arrow-matrix ref="origin/main" rows="1000000" +args="":
+    uv run --group profiling python scripts/benchmark_http_to_arrow_matrix.py --ref {{ref}} --rows {{rows}} {{args}}

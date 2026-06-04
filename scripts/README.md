@@ -189,3 +189,64 @@ The script reports:
 Summaries are written under `profiles/http_to_arrow/` which is git-ignored.
 Treat comparisons as advisory rather than pass/fail: peak RSS and timings
 are machine-dependent and will vary inside devcontainers vs. CI runners.
+
+## `benchmark_http_to_arrow_matrix.py`
+
+Runs the profiler across a fixed configuration matrix (5 feature-flag
+combinations x 3 scenarios) against a single baseline ref and emits a
+checked-in markdown comparison artifact plus a sibling CSV. Use this when
+you want per-knob attribution rather than the single "all-on vs baseline"
+delta produced by `compare_http_to_arrow.py`.
+
+The 5 configs isolate each opt-in memory knob:
+
+| label | `dictionary_encode` | `compact_on_materialize` | `eager_clear_accumulator` |
+| --- | --- | --- | --- |
+| `off` | F | F | F |
+| `+dict` | T | F | F |
+| `+compact` | F | T | F |
+| `+eager` | F | F | T |
+| `all-on` | T | T | T |
+
+The baseline ref is run once per scenario (it does not understand the new
+flags) and every config row also has `Deltas vs off` columns so reviewers
+see at a glance which knob owns which cost.
+
+### Default invocation (1M rows, all 3 scenarios)
+
+```bash
+just profile-http-to-arrow-matrix
+```
+
+or equivalently:
+
+```bash
+uv run --group profiling python scripts/benchmark_http_to_arrow_matrix.py \
+  --ref origin/main --rows 1000000
+```
+
+### Limit to specific scenarios
+
+```bash
+just profile-http-to-arrow-matrix origin/main 1000000 \
+  --scenarios nested-http,high-cardinality
+```
+
+### Periodic deep validation (5M rows)
+
+```bash
+just profile-http-to-arrow-matrix origin/main 5000000 --merge-base
+```
+
+### Outputs
+
+- `benchmarks/http_to_arrow/COMPARISON_MATRIX.md` -- committed markdown
+  artifact; PRs can `git diff` this to spot regressions.
+- `benchmarks/http_to_arrow/comparison_matrix.csv` -- flat CSV of every
+  `(scenario, source)` row for downstream tooling.
+- `profiles/http_to_arrow/matrix/<branch_commit>/` -- per-config JSON
+  summaries (gitignored).
+
+The matrix re-uses `compare_http_to_arrow.py`'s worktree + fixture
+infrastructure, so the worktree dance, `--merge-base`, and fixture
+caching all behave identically.
