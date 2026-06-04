@@ -9,7 +9,7 @@ against to spot regressions.
 The matrix dimensions are fixed and explicit by design (5 configs that
 isolate each opt-in memory knob plus an ``all-on`` preset), not a 2^N
 truth table -- this gives us per-knob attribution without combinatorial
-noise. See [PLAN] in ``/memories/session/plan.md`` for the rationale.
+noise. See ``scripts/README.md`` for the rationale.
 
 Example::
 
