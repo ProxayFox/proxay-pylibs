@@ -254,8 +254,15 @@ class ArrowRecordContainer:
         for arrow_field in base:
             promoted = new_field_types.get(arrow_field.name)
             field_type = promoted if promoted is not None else arrow_field.type
-            updated_fields.append(pa.field(arrow_field.name, field_type))
-        self._materialized_schema = pa.schema(updated_fields)
+            updated_fields.append(
+                pa.field(
+                    arrow_field.name,
+                    field_type,
+                    nullable=arrow_field.nullable,
+                    metadata=arrow_field.metadata,
+                )
+            )
+        self._materialized_schema = pa.schema(updated_fields, metadata=base.metadata)
 
     def _refresh_schema_cache(self) -> None:
         """Refresh cached schema metadata after schema changes."""
