@@ -262,7 +262,12 @@ class ArrowRecordContainer:
                     metadata=arrow_field.metadata,
                 )
             )
-        self._materialized_schema = pa.schema(updated_fields, metadata=base.metadata)
+        self._materialized_schema = pa.schema(
+            updated_fields,
+            metadata={k: v for k, v in base.metadata.items()}
+            if base.metadata is not None
+            else None,
+        )
 
     def _refresh_schema_cache(self) -> None:
         """Refresh cached schema metadata after schema changes."""
