@@ -77,6 +77,29 @@ The starter includes:
 4. Add new packages under `src/<package_name>/` using the standard package
    scaffold described below.
 
+## Documentation
+
+The MkDocs site for `http-to-arrow` lives under `docs/`, with configuration in
+`mkdocs.yml`.
+
+Install documentation dependencies with:
+
+```bash
+uv sync --all-packages --group docs
+```
+
+Serve the site locally:
+
+```bash
+just docs-serve
+```
+
+Build the site in strict mode:
+
+```bash
+just docs-build
+```
+
 ## Testing and coverage
 
 - The shared pytest configuration lives in the repository root `pyproject.toml`.
