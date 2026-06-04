@@ -81,6 +81,66 @@ uv run --group profiling python scripts/profile_http_to_arrow.py \
   --scenario nested-http
 ```
 
+## `compare_http_to_arrow.py`
+
+Orchestrates a two-sided comparison without leaving your feature branch.
+It resolves a target git ref (default `origin/main`), creates a temporary
+worktree at that commit, copies the *current* profiler script into the
+worktree so measurement code is identical on both sides, runs the baseline,
+then runs the current branch with `--compare-to` and prints deltas. The
+worktree is cleaned up on exit unless `--keep-worktree` is set.
+
+### Default comparison (current branch vs `origin/main`)
+
+```bash
+uv run --group profiling python scripts/compare_http_to_arrow.py \
+  --rows 1000000 --scenario nested-http
+```
+
+By default the branch run enables
+`--dictionary-encode --compact-on-materialize --eager-clear-accumulator`
+so the comparison shows the memory-optimization deltas.
+
+### Compare against the merge-base instead of the ref tip
+
+This isolates *this branch's* changes from unrelated `main` movement:
+
+```bash
+uv run --group profiling python scripts/compare_http_to_arrow.py \
+  --ref origin/main --merge-base \
+  --rows 1000000 --scenario nested-http
+```
+
+### Customize per-side flags
+
+```bash
+uv run --group profiling python scripts/compare_http_to_arrow.py \
+  --ref origin/main \
+  --rows 1000000 --scenario dictionary-friendly \
+  --baseline-extra "" \
+  --branch-extra "--dictionary-encode --compact-on-materialize"
+```
+
+### Convenience just recipe
+
+```bash
+just profile-http-to-arrow-vs origin/main 1000000 --merge-base
+```
+
+### Notes
+
+- The orchestrator runs `git fetch origin` once unless `--no-fetch` is
+  passed. Use `--no-fetch` for offline runs.
+- `uv sync --all-packages --group profiling` runs once inside the worktree
+  (the `--all-packages` is required so the workspace member
+  `http_to_arrow` is installed). Only pass `--skip-uv-sync` if you're
+  reusing a pre-prepared worktree via `--worktree-dir` whose `.venv`
+  already has the workspace installed; a fresh worktree will fail without
+  the sync.
+- Summaries land in `profiles/http_to_arrow/` (git-ignored). The baseline
+  filename includes the resolved short SHA so repeated runs against
+  different commits don't overwrite each other.
+
 ## Interpreting the summary
 
 The script reports:

@@ -406,13 +406,26 @@ def _summarize_table(table: pa.Table) -> tuple[int, tuple[str, ...]]:
 def run_benchmark(args: argparse.Namespace) -> Metrics:
     """Execute one benchmark run and return the captured metrics."""
     schema = build_http_event_schema()
+    # Only forward the memory-optimization kwargs when their values differ
+    # from the historical (pre-optimization) defaults. This keeps the
+    # profiler usable against older revisions of ``ArrowRecordContainer``
+    # (e.g. ``origin/main``) whose ``__init__`` doesn't accept these
+    # parameters yet.
+    extra_kwargs: dict[str, Any] = {}
+    if args.dictionary_encode:
+        extra_kwargs["dictionary_encode"] = True
+    if args.dictionary_cardinality_threshold != 0.5:
+        extra_kwargs["dictionary_cardinality_threshold"] = (
+            args.dictionary_cardinality_threshold
+        )
+    if args.compact_on_materialize:
+        extra_kwargs["compact_on_materialize"] = True
+    if args.eager_clear_accumulator:
+        extra_kwargs["eager_clear_accumulator"] = True
     container = ArrowRecordContainer(
         schema=schema,
         batch_size=args.batch_size,
-        dictionary_encode=args.dictionary_encode,
-        dictionary_cardinality_threshold=args.dictionary_cardinality_threshold,
-        compact_on_materialize=args.compact_on_materialize,
-        eager_clear_accumulator=args.eager_clear_accumulator,
+        **extra_kwargs,
     )
 
     records = iter_records(num_rows=args.rows, scenario=args.scenario, seed=args.seed)

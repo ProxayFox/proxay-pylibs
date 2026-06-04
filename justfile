@@ -94,3 +94,7 @@ profile-http-to-arrow-scalene rows="1000000" out="profiles/http_to_arrow/scalene
 profile-http-to-arrow-pyinstrument rows="1000000" out="profiles/http_to_arrow/pyinstrument_nested.html" +args="":
     mkdir -p "$(dirname {{out}})"
     uv run --group profiling python -m pyinstrument --html -o {{out}} scripts/profile_http_to_arrow.py --rows {{rows}} {{args}}
+
+# Compare current branch against another git ref (default origin/main) using a temporary worktree.
+profile-http-to-arrow-vs ref="origin/main" rows="1000000" +args="":
+    uv run --group profiling python scripts/compare_http_to_arrow.py --ref {{ref}} --rows {{rows}} {{args}}
