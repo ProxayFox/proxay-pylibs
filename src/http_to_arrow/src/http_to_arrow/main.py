@@ -2,18 +2,34 @@
 
 from __future__ import annotations
 
-import pyarrow as pa
-import polars as pl
 import threading
-
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Iterable, Literal, Mapping, cast
+from datetime import datetime
+from typing import Any, Iterable, Mapping, cast
 
+import polars as pl
+import pyarrow as pa
 
-UnknownFieldPolicy = Literal["drop", "error", "capture"]
-MissingFieldPolicy = Literal["null", "error"]
-CoercionPolicy = Literal["coerce", "strict"]
+from http_to_arrow._coercion import (
+    coerce_inferred_value,
+    coerce_timestamp_value,
+    coerce_value,
+)
+from http_to_arrow._encoding import maybe_dictionary_encode_array
+from http_to_arrow._policies import (
+    CoercionPolicy,
+    MissingFieldPolicy,
+    UnknownFieldPolicy,
+)
+from http_to_arrow._schema import (
+    align_batch_to_schema,
+    align_table_to_schema,
+    cast_array_to_type,
+    cast_column_to_type,
+    infer_arrow_type,
+    merge_arrow_types,
+    merge_struct_fields,
+)
 
 
 @dataclass
@@ -51,6 +67,36 @@ class ArrowRecordContainer:
         default=True,
         doc="Resolve incoming keys case-insensitively when exact matches are absent.",
     )
+    eager_clear_accumulator: bool = field(
+        default=False,
+        doc=(
+            "Free each accumulator column list immediately after its array is built "
+            "during flush(). Opt-in memory mode; do not enable when flush() failures "
+            "need to be retried on the same in-flight rows."
+        ),
+    )
+    dictionary_encode: bool = field(
+        default=False,
+        doc=(
+            "Opt-in dictionary encoding for low-cardinality string columns when an "
+            "explicit schema is supplied. Encoded columns return dictionary-typed "
+            "Arrow arrays."
+        ),
+    )
+    dictionary_cardinality_threshold: float = field(
+        default=0.5,
+        doc=(
+            "Maximum unique/row ratio at which a string column will be dictionary "
+            "encoded. Must be in [0.0, 1.0]. Ignored when dictionary_encode is False."
+        ),
+    )
+    compact_on_materialize: bool = field(
+        default=False,
+        doc=(
+            "Run pa.Table.combine_chunks() after materializing pending batches into "
+            "the cached table to reduce chunk fragmentation across flushes."
+        ),
+    )
     batches: list[pa.RecordBatch] = field(
         default_factory=list,
         doc="List of record batches pending materialization into the cached table.",
@@ -79,9 +125,17 @@ class ArrowRecordContainer:
     _accumulator: dict[str, list] = field(default_factory=dict, init=False, repr=False)
     _current_count: int = field(default=0, init=False, repr=False)
     _pending_batch_rows: int = field(default=0, init=False, repr=False)
+    _materialized_schema: pa.Schema | None = field(default=None, init=False, repr=False)
     _lock: threading.Lock = field(default_factory=threading.Lock)
 
+    # --- lifecycle ---
+
     def __post_init__(self) -> None:
+        if not 0.0 <= self.dictionary_cardinality_threshold <= 1.0:
+            raise ValueError(
+                "dictionary_cardinality_threshold must be between 0.0 and 1.0."
+            )
+
         self._schema_explicit = self.schema is not None
 
         if self.table is not None:
@@ -99,6 +153,37 @@ class ArrowRecordContainer:
         )
         self._pending_batch_rows = sum(b.num_rows for b in self.batches)
         self._init_accumulator()
+
+    def _effective_schema(self) -> pa.Schema | None:
+        """Return the schema used for flushed batches and the cached table.
+
+        When dictionary encoding has not yet promoted any columns this is
+        identical to ``self.schema``. When encoding has been applied the
+        cached materialized schema carries the chosen dictionary types so
+        subsequent batches stay schema-compatible.
+        """
+        return self._materialized_schema or self.schema
+
+    def _update_materialized_field_types(
+        self, new_field_types: dict[str, pa.DataType]
+    ) -> None:
+        """Record encoded field types in the materialized schema cache."""
+        if not new_field_types or self.schema is None:
+            return
+
+        base = self._materialized_schema or self.schema
+        if all(
+            base.field(name).type.equals(new_field_types[name])
+            for name in new_field_types
+        ):
+            return
+
+        updated_fields: list[pa.Field] = []
+        for arrow_field in base:
+            promoted = new_field_types.get(arrow_field.name)
+            field_type = promoted if promoted is not None else arrow_field.type
+            updated_fields.append(pa.field(arrow_field.name, field_type))
+        self._materialized_schema = pa.schema(updated_fields)
 
     def _refresh_schema_cache(self) -> None:
         """Refresh cached schema metadata after schema changes."""
@@ -156,219 +241,67 @@ class ArrowRecordContainer:
             return record
         return self.normalize_record(record)
 
+    # ---------------------------------------------------- pure helper delegations
+
     @classmethod
     def _coerce_timestamp_value(cls, value: Any) -> datetime | Any | None:
-        """Parse ISO-8601 strings while preserving the represented instant."""
-        if not isinstance(value, str):
-            return value
-
-        iso_value = value.strip()
-        if iso_value.endswith("Z"):
-            iso_value = f"{iso_value[:-1]}+00:00"
-
-        try:
-            parsed = datetime.fromisoformat(iso_value)
-        except TypeError, ValueError:
-            return None
-
-        if parsed.tzinfo is not None:
-            parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
-
-        return parsed
+        return coerce_timestamp_value(value)
 
     @classmethod
-    def _coerce_value(cls, value: Any, arrow_type: pa.DataType):
-        """Recursively coerce a value to match the given PyArrow type."""
-        if value is None:
-            return None
-
-        if pa.types.is_timestamp(arrow_type):
-            return cls._coerce_timestamp_value(value)
-
-        if pa.types.is_struct(arrow_type):
-            if not isinstance(value, Mapping):
-                return value
-
-            return {
-                arrow_field.name: cls._coerce_value(
-                    value.get(arrow_field.name), arrow_field.type
-                )
-                for arrow_field in arrow_type
-            }
-
-        if pa.types.is_list(arrow_type) or pa.types.is_large_list(arrow_type):
-            item_type = cast(pa.DataType, arrow_type.value_type)
-            if (
-                isinstance(value, Mapping)
-                and pa.types.is_struct(item_type)
-                and item_type.num_fields == 2
-            ):
-                first_field = item_type.field(0).name
-                second_field = item_type.field(1).name
-                value = [
-                    {first_field: key, second_field: item_value}
-                    for key, item_value in value.items()
-                ]
-
-            if not isinstance(value, list):
-                return value
-
-            return [cls._coerce_value(item, item_type) for item in value]
-
-        return value
+    def _coerce_value(cls, value: Any, arrow_type: pa.DataType) -> Any:
+        return coerce_value(value, arrow_type)
 
     @classmethod
     def _coerce_inferred_value(cls, value: Any, arrow_type: pa.DataType) -> Any:
-        """Coerce inferred-mode values into the current Arrow field shape."""
-        if value is None:
-            return None
-
-        if pa.types.is_string(arrow_type):
-            return value if isinstance(value, str) else str(value)
-
-        if pa.types.is_struct(arrow_type):
-            if not isinstance(value, Mapping):
-                return value
-
-            return {
-                arrow_field.name: cls._coerce_inferred_value(
-                    value.get(arrow_field.name), arrow_field.type
-                )
-                for arrow_field in arrow_type
-            }
-
-        if pa.types.is_list(arrow_type) or pa.types.is_large_list(arrow_type):
-            if not isinstance(value, list):
-                return value
-
-            item_type = cast(pa.DataType, arrow_type.value_type)
-            return [cls._coerce_inferred_value(item, item_type) for item in value]
-
-        return cls._coerce_value(value, arrow_type)
+        return coerce_inferred_value(value, arrow_type)
 
     @classmethod
     def _infer_arrow_type(cls, value: Any) -> pa.DataType:
-        """Infer a reasonable Arrow type for a Python value."""
-        if value is None:
-            return pa.null()
-
-        if isinstance(value, bool):
-            return pa.bool_()
-
-        if isinstance(value, int):
-            return pa.int64()
-
-        if isinstance(value, float):
-            return pa.float64()
-
-        if isinstance(value, datetime):
-            return pa.timestamp("us")
-
-        if isinstance(value, bytes):
-            return pa.binary()
-
-        if isinstance(value, Mapping):
-            return pa.struct(
-                [
-                    pa.field(str(key), cls._infer_arrow_type(item_value))
-                    for key, item_value in value.items()
-                ]
-            )
-
-        if isinstance(value, list):
-            item_type = pa.null()
-            for item in value:
-                item_type = cls._merge_arrow_types(
-                    item_type, cls._infer_arrow_type(item)
-                )
-            return pa.list_(item_type)
-
-        return pa.string()
+        return infer_arrow_type(value)
 
     @classmethod
     def _merge_struct_fields(
         cls, existing: pa.StructType, observed: pa.StructType
     ) -> list[pa.Field]:
-        """Merge struct members while preserving first-seen order."""
-        ordered_names = [f.name for f in existing]
-        merged_fields: dict[str, pa.Field] = {
-            f.name: pa.field(f.name, f.type) for f in existing
-        }
-
-        for f in observed:
-            if f.name in merged_fields:
-                merged_type = cls._merge_arrow_types(
-                    merged_fields[f.name].type,
-                    f.type,
-                )
-                merged_fields[f.name] = pa.field(f.name, merged_type)
-                continue
-
-            ordered_names.append(f.name)
-            merged_fields[f.name] = pa.field(f.name, f.type)
-
-        return [merged_fields[name] for name in ordered_names]
+        return merge_struct_fields(existing, observed)
 
     @classmethod
     def _merge_arrow_types(
         cls, existing: pa.DataType, observed: pa.DataType
     ) -> pa.DataType:
-        """Merge two Arrow types for schema widening in inferred mode."""
-        if existing.equals(observed):
-            return existing
+        return merge_arrow_types(existing, observed)
 
-        if pa.types.is_null(existing):
-            return observed
+    def _cast_array_to_type(
+        self, array: pa.Array, target_type: pa.DataType
+    ) -> pa.Array:
+        return cast_array_to_type(array, target_type, coerce_inferred_value)
 
-        if pa.types.is_null(observed):
-            return existing
+    def _cast_column_to_type(
+        self, column: pa.ChunkedArray, target_type: pa.DataType
+    ) -> pa.ChunkedArray:
+        return cast_column_to_type(column, target_type, coerce_inferred_value)
 
-        if pa.types.is_string(existing) or pa.types.is_string(observed):
-            return pa.string()
+    def _align_batch_to_schema(
+        self, batch: pa.RecordBatch, schema: pa.Schema
+    ) -> pa.RecordBatch:
+        return align_batch_to_schema(batch, schema, coerce_inferred_value)
 
-        if pa.types.is_boolean(existing) and pa.types.is_boolean(observed):
-            return pa.bool_()
+    def _align_table_to_schema(self, table: pa.Table, schema: pa.Schema) -> pa.Table:
+        return align_table_to_schema(table, schema, coerce_inferred_value)
 
-        if pa.types.is_integer(existing) and pa.types.is_integer(observed):
-            return pa.int64()
-
-        if (pa.types.is_integer(existing) or pa.types.is_floating(existing)) and (
-            pa.types.is_integer(observed) or pa.types.is_floating(observed)
-        ):
-            return pa.float64()
-
-        if pa.types.is_binary(existing) and pa.types.is_binary(observed):
-            return pa.binary()
-
-        if pa.types.is_timestamp(existing) and pa.types.is_timestamp(observed):
-            return pa.timestamp("us")
-
-        if (pa.types.is_list(existing) or pa.types.is_large_list(existing)) and (
-            pa.types.is_list(observed) or pa.types.is_large_list(observed)
-        ):
-            return pa.list_(
-                cls._merge_arrow_types(
-                    cast(pa.DataType, existing.value_type),
-                    cast(pa.DataType, observed.value_type),
-                )
-            )
-
-        if pa.types.is_struct(existing) and pa.types.is_struct(observed):
-            return pa.struct(cls._merge_struct_fields(existing, observed))
-
-        return pa.string()
+    # ------------------------------------------------------ inferred-mode growth
 
     def _ensure_inferred_schema_for_record(self, record: Mapping[str, Any]) -> None:
         """Grow or widen the inferred schema to accommodate *record*."""
-        ordered_names = [field.name for field in self._schema_fields]
+        ordered_names = [arrow_field.name for arrow_field in self._schema_fields]
         fields_by_name: dict[str, pa.Field] = {
-            field.name: pa.field(field.name, field.type)
-            for field in self._schema_fields
+            arrow_field.name: pa.field(arrow_field.name, arrow_field.type)
+            for arrow_field in self._schema_fields
         }
         schema_changed = False
 
         for key, value in record.items():
-            observed_type = self._infer_arrow_type(value)
+            observed_type = infer_arrow_type(value)
             existing_field = fields_by_name.get(key)
 
             if existing_field is None:
@@ -377,7 +310,7 @@ class ArrowRecordContainer:
                 schema_changed = True
                 continue
 
-            merged_type = self._merge_arrow_types(existing_field.type, observed_type)
+            merged_type = merge_arrow_types(existing_field.type, observed_type)
             if not merged_type.equals(existing_field.type):
                 fields_by_name[key] = pa.field(key, merged_type)
                 schema_changed = True
@@ -387,100 +320,22 @@ class ArrowRecordContainer:
                 pa.schema([fields_by_name[name] for name in ordered_names])
             )
 
-    def _cast_array_to_type(
-        self, array: pa.Array, target_type: pa.DataType
-    ) -> pa.Array:
-        """Cast an Arrow array to *target_type*, falling back to Python-level conversion."""
-        if array.type.equals(target_type):
-            return array
-
-        if pa.types.is_null(array.type):
-            return pa.array([None] * len(array), type=target_type, from_pandas=False)
-
-        try:
-            return array.cast(target_type)
-        except NotImplementedError, TypeError, ValueError, pa.ArrowInvalid:
-            return pa.array(
-                [
-                    self._coerce_inferred_value(value, target_type)
-                    for value in array.to_pylist()
-                ],
-                type=target_type,
-                from_pandas=False,
-            )
-
-    def _cast_column_to_type(
-        self, column: pa.ChunkedArray, target_type: pa.DataType
-    ) -> pa.ChunkedArray:
-        """Cast a chunked column to *target_type*."""
-        if column.type.equals(target_type):
-            return column
-
-        if not column.chunks:
-            return pa.chunked_array(
-                [pa.array([], type=target_type)],
-            )
-
-        return pa.chunked_array(
-            [self._cast_array_to_type(chunk, target_type) for chunk in column.chunks]
-        )
-
-    def _align_batch_to_schema(
-        self, batch: pa.RecordBatch, schema: pa.Schema
-    ) -> pa.RecordBatch:
-        """Align a batch to the supplied schema, adding null columns as needed."""
-        if batch.schema.equals(schema):
-            return batch
-
-        arrays: list[pa.Array] = []
-        index_by_name = {name: idx for idx, name in enumerate(batch.schema.names)}
-
-        for arrow_field in schema:
-            if arrow_field.name in index_by_name:
-                array = batch.column(index_by_name[arrow_field.name])
-                if not array.type.equals(arrow_field.type):
-                    array = self._cast_array_to_type(array, arrow_field.type)
-            else:
-                array = pa.nulls(batch.num_rows, type=arrow_field.type)
-            arrays.append(array)
-
-        return pa.RecordBatch.from_arrays(arrays, schema=schema)
-
-    def _align_table_to_schema(self, table: pa.Table, schema: pa.Schema) -> pa.Table:
-        """Align a table to the supplied schema, adding null columns as needed."""
-        if table.schema.equals(schema):
-            return table
-
-        arrays: list[pa.ChunkedArray] = []
-        source_names = frozenset(table.schema.names)
-
-        for arrow_field in schema:
-            if arrow_field.name in source_names:
-                column = table.column(arrow_field.name)
-                if not column.type.equals(arrow_field.type):
-                    column = self._cast_column_to_type(column, arrow_field.type)
-            else:
-                column = pa.chunked_array(
-                    [pa.nulls(table.num_rows, type=arrow_field.type)],
-                    type=arrow_field.type,
-                )
-            arrays.append(column)
-
-        return pa.Table.from_arrays(arrays, schema=schema)
-
     def _align_materialized_state_to_schema(self) -> None:
-        """Realign cached batches and tables when inferred schema grows."""
-        if self.schema is None:
+        """Realign cached batches and tables to the current effective schema."""
+        effective_schema = self._effective_schema()
+        if effective_schema is None:
             return
 
-        if self.table is not None and not self.table.schema.equals(self.schema):
-            self.table = self._align_table_to_schema(self.table, self.schema)
+        if self.table is not None and not self.table.schema.equals(effective_schema):
+            self.table = self._align_table_to_schema(self.table, effective_schema)
 
-        if any(not batch.schema.equals(self.schema) for batch in self.batches):
+        if any(not batch.schema.equals(effective_schema) for batch in self.batches):
             self.batches = [
-                self._align_batch_to_schema(batch, self.schema)
+                self._align_batch_to_schema(batch, effective_schema)
                 for batch in self.batches
             ]
+
+    # ----------------------------------------------------------------- appending
 
     def _resolve_field_key(
         self,
@@ -525,7 +380,7 @@ class ArrowRecordContainer:
                 raw_value = None
 
             value = (
-                self._coerce_value(raw_value, arrow_field.type)
+                coerce_value(raw_value, arrow_field.type)
                 if self.coercion_policy == "coerce"
                 else raw_value
             )
@@ -559,7 +414,7 @@ class ArrowRecordContainer:
                 raw_value = None
 
             value = (
-                self._coerce_inferred_value(raw_value, arrow_field.type)
+                coerce_inferred_value(raw_value, arrow_field.type)
                 if self.coercion_policy == "coerce"
                 else raw_value
             )
@@ -601,7 +456,7 @@ class ArrowRecordContainer:
                 raw_value = normalized_record.get(resolved_key)
 
             value = (
-                self._coerce_value(raw_value, arrow_field.type)
+                coerce_value(raw_value, arrow_field.type)
                 if self.coercion_policy == "coerce"
                 else raw_value
             )
@@ -623,6 +478,8 @@ class ArrowRecordContainer:
         for record in records:
             self.append(record)
 
+    # --- flush / materialize ---
+
     def flush(self) -> None:
         """Convert accumulated records into a RecordBatch."""
         if self._current_count == 0:
@@ -633,13 +490,21 @@ class ArrowRecordContainer:
                 "Cannot flush records without an explicit or inferred schema."
             )
 
+        encoding_active = self.dictionary_encode and self._schema_explicit
+        if encoding_active:
+            effective_schema = self._effective_schema()
+            assert effective_schema is not None  # noqa: S101
+            effective_fields = tuple(effective_schema)
+        else:
+            effective_fields = self._schema_fields
+
         arrays: list[pa.Array] = []
-        for arrow_field in self._schema_fields:
+        new_field_types: dict[str, pa.DataType] = {}
+        for index, arrow_field in enumerate(self._schema_fields):
             values = self._accumulator[arrow_field.name]
             if not self._schema_explicit and self.coercion_policy == "coerce":
                 values = [
-                    self._coerce_inferred_value(value, arrow_field.type)
-                    for value in values
+                    coerce_inferred_value(value, arrow_field.type) for value in values
                 ]
 
             try:
@@ -657,9 +522,26 @@ class ArrowRecordContainer:
                     f"Error processing column '{arrow_field.name}': {exc}"
                 ) from exc
 
-            arrays.append(array)
+            if encoding_active:
+                existing_effective_type = effective_fields[index].type
+                array = maybe_dictionary_encode_array(
+                    array,
+                    arrow_field.type,
+                    existing_effective_type,
+                    self.dictionary_cardinality_threshold,
+                )
+                if not array.type.equals(existing_effective_type):
+                    new_field_types[arrow_field.name] = array.type
 
-        self.batches.append(pa.RecordBatch.from_arrays(arrays, schema=self.schema))
+            arrays.append(array)
+            if self.eager_clear_accumulator:
+                self._accumulator[arrow_field.name] = []
+
+        if new_field_types:
+            self._update_materialized_field_types(new_field_types)
+
+        batch_schema = self._effective_schema()
+        self.batches.append(pa.RecordBatch.from_arrays(arrays, schema=batch_schema))
         self._pending_batch_rows += self.batches[-1].num_rows
         self._init_accumulator()
 
@@ -678,20 +560,24 @@ class ArrowRecordContainer:
                 )
 
             self._align_materialized_state_to_schema()
+            effective_schema = self._effective_schema()
 
             if not self.batches:
                 if self.table is None:
-                    self.table = pa.Table.from_batches([], schema=self.schema)
+                    self.table = pa.Table.from_batches([], schema=effective_schema)
                 return self.table
 
-            batch_table = pa.Table.from_batches(self.batches, schema=self.schema)
-            self.table = (
-                pa.concat_tables([self.table, batch_table])
-                if self.table is not None
-                else batch_table
-            )
+            batch_table = pa.Table.from_batches(self.batches, schema=effective_schema)
             self.batches.clear()
             self._pending_batch_rows = 0
+            if self.table is not None:
+                merged_table = pa.concat_tables([self.table, batch_table])
+            else:
+                merged_table = batch_table
+            del batch_table
+            if self.compact_on_materialize:
+                merged_table = merged_table.combine_chunks()
+            self.table = merged_table
             return self.table
 
     def incremental_flush(self, threshold: int = 0) -> bool:
@@ -716,15 +602,19 @@ class ArrowRecordContainer:
                 )
 
             self._align_materialized_state_to_schema()
+            effective_schema = self._effective_schema()
 
-            batch_table = pa.Table.from_batches(self.batches, schema=self.schema)
-            self.table = (
-                pa.concat_tables([self.table, batch_table])
-                if self.table is not None
-                else batch_table
-            )
+            batch_table = pa.Table.from_batches(self.batches, schema=effective_schema)
             self.batches.clear()
             self._pending_batch_rows = 0
+            if self.table is not None:
+                merged_table = pa.concat_tables([self.table, batch_table])
+            else:
+                merged_table = batch_table
+            del batch_table
+            if self.compact_on_materialize:
+                merged_table = merged_table.combine_chunks()
+            self.table = merged_table
             return True
 
     def to_polars_frame(self) -> pl.DataFrame:
@@ -745,18 +635,18 @@ class ArrowRecordContainer:
         self._pending_batch_rows = 0
         self.captured_extras.clear()
         self.table = None
+        self._materialized_schema = None
 
-    @property
+    # --- compatibility aliases ---
+
     def to_arrow(self) -> pa.Table:
         """Backward-compatible alias for materializing the cached Arrow table."""
         return self.to_table()
 
-    @property
     def to_polars(self) -> pl.DataFrame:
         """Backward-compatible alias for materializing a Polars DataFrame."""
         return self.to_polars_frame()
 
-    @property
     def clear(self) -> None:
         """Backward-compatible alias for resetting container state."""
         self.reset()
@@ -773,3 +663,11 @@ class ArrowRecordContainer:
         if self.table is not None:
             total += self.table.num_rows
         return total
+
+
+__all__ = [
+    "ArrowRecordContainer",
+    "CoercionPolicy",
+    "MissingFieldPolicy",
+    "UnknownFieldPolicy",
+]

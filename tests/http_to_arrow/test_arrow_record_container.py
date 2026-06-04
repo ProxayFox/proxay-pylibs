@@ -602,7 +602,7 @@ def test_reset_and_clear_alias_remove_all_accumulated_state() -> None:
     assert container.total_rows == 2
     assert container.captured_extras == [{"extra": "kept"}]
 
-    assert container.clear is None
+    assert container.clear() is None
 
     assert container.table is None
     assert container.batches == []
@@ -618,8 +618,13 @@ def test_alias_properties_materialize_arrow_and_polars_views() -> None:
     )
     container.append({"id": 5})
 
-    assert container.to_arrow.column("id").to_pylist() == [5]
-    assert container.to_polars["id"].to_list() == [5]
+    tbl = container.to_table()
+    arrow_tbl = container.to_arrow()
+    df = container.to_polars()
+
+    assert tbl.column("id").to_pylist() == [5]
+    assert arrow_tbl.column("id").to_pylist() == [5]
+    assert df["id"].to_list() == [5]
 
 
 @pytest.mark.unit
