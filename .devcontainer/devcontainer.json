@@ -47,7 +47,6 @@
 				"wholroyd.jinja",
 				"batisteo.vscode-django",
 				"KevinRose.vsc-python-indent",
-				// "anysphere.cursorpyright", // Cursor Pyright extension
 				// Remote development extensions
 				"ms-vscode-remote.vscode-remote-extensionpack",
 				"GitHub.codespaces",
@@ -58,9 +57,10 @@
 				"GitHub.vscode-pull-request-github", // GitHub PR Extension
 				"GitHub.vscode-github-actions", // GitHub Actions
 				// Misc
-				"tamasfe.even-better-toml", // TOML support
-				"Gruntfuggly.todo-tree",
-				"EditorConfig.EditorConfig" // EditorConfig support
+                "tamasfe.even-better-toml", // TOML support
+                "Gruntfuggly.todo-tree",
+                "EditorConfig.EditorConfig", // EditorConfig support
+                "skellock.just" // Justfile support
 			]
 		}
 	}
