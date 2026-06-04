@@ -5,17 +5,18 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Iterable, Mapping, cast
+from typing import Any, Iterable, Mapping
 
 import polars as pl
 import pyarrow as pa
 
+from http_to_arrow import _appending
+from http_to_arrow import _materialization
 from http_to_arrow._coercion import (
     coerce_inferred_value,
     coerce_timestamp_value,
     coerce_value,
 )
-from http_to_arrow._encoding import maybe_dictionary_encode_array
 from http_to_arrow._policies import (
     CoercionPolicy,
     MissingFieldPolicy,
@@ -428,206 +429,38 @@ class ArrowRecordContainer:
         lower_key_map: dict[str, str],
     ) -> str | None:
         """Resolve an incoming key for a schema field."""
-        if field_name in record:
-            return field_name
-
-        if not self.case_insensitive_keys:
-            return None
-
-        return lower_key_map.get(field_name.lower())
+        return _appending.resolve_field_key(
+            self,
+            field_name,
+            record,
+            lower_key_map,
+        )
 
     def _handle_unknown_fields(self, extras: dict[str, Any]) -> None:
         """Apply the configured explicit-schema policy for extra keys."""
-        if not extras:
-            return
-
-        if self.unknown_field_policy == "error":
-            extra_keys = ", ".join(sorted(extras))
-            raise ValueError(f"Unexpected fields not present in schema: {extra_keys}")
-
-        if self.unknown_field_policy == "capture":
-            self.captured_extras.append(extras)
+        _appending.handle_unknown_fields(self, extras)
 
     def _append_exact_key_record(self, record: Mapping[str, Any]) -> bool:
         """Fast path for records that contain no keys outside the schema."""
-        if any(key not in self._schema_field_names for key in record):
-            return False
-
-        for arrow_field in self._schema_fields:
-            if arrow_field.name in record:
-                raw_value = record.get(arrow_field.name)
-            else:
-                if self.missing_field_policy == "error":
-                    raise ValueError(
-                        f"Missing required schema field '{arrow_field.name}'."
-                    )
-                raw_value = None
-
-            value = (
-                coerce_value(raw_value, arrow_field.type)
-                if self.coercion_policy == "coerce"
-                else raw_value
-            )
-            self._accumulator[arrow_field.name].append(value)
-
-        self._current_count += 1
-        if self._current_count >= self.batch_size:
-            self.flush()
-
-        return True
+        return _appending.append_exact_key_record(self, record)
 
     def _append_inferred_record(self, record: Mapping[str, Any]) -> None:
         """Append a record while inferring and widening schema over time."""
-        resolved_record = {
-            self._canonicalize_inferred_key(key): value for key, value in record.items()
-        }
-
-        if not resolved_record and self.schema is None:
-            raise ValueError("Cannot infer schema from an empty record.")
-
-        self._ensure_inferred_schema_for_record(resolved_record)
-
-        for arrow_field in self._schema_fields:
-            if arrow_field.name in resolved_record:
-                raw_value = resolved_record.get(arrow_field.name)
-            else:
-                if self.missing_field_policy == "error":
-                    raise ValueError(
-                        f"Missing required schema field '{arrow_field.name}'."
-                    )
-                raw_value = None
-
-            value = (
-                coerce_inferred_value(raw_value, arrow_field.type)
-                if self.coercion_policy == "coerce"
-                else raw_value
-            )
-            self._accumulator[arrow_field.name].append(value)
-
-        self._current_count += 1
-        if self._current_count >= self.batch_size:
-            self.flush()
+        _appending.append_inferred_record(self, record)
 
     def append(self, record: Mapping[str, Any]) -> None:
         """Append a single record to the container."""
-        normalized_record = self._prepare_record(record)
-        if not self._schema_explicit:
-            self._append_inferred_record(normalized_record)
-            return
-
-        if self._append_exact_key_record(normalized_record):
-            return
-
-        lower_key_map = {key.lower(): key for key in normalized_record}
-        matched_keys: set[str] = set()
-
-        for arrow_field in self._schema_fields:
-            resolved_key = self._resolve_field_key(
-                arrow_field.name,
-                normalized_record,
-                lower_key_map,
-            )
-
-            if resolved_key is None:
-                if self.missing_field_policy == "error":
-                    raise ValueError(
-                        f"Missing required schema field '{arrow_field.name}'."
-                    )
-
-                raw_value = None
-            else:
-                matched_keys.add(resolved_key)
-                raw_value = normalized_record.get(resolved_key)
-
-            value = (
-                coerce_value(raw_value, arrow_field.type)
-                if self.coercion_policy == "coerce"
-                else raw_value
-            )
-            self._accumulator[arrow_field.name].append(value)
-
-        extras = {
-            key: value
-            for key, value in normalized_record.items()
-            if key not in matched_keys
-        }
-        self._handle_unknown_fields(extras)
-
-        self._current_count += 1
-        if self._current_count >= self.batch_size:
-            self.flush()
+        _appending.append(self, record)
 
     def extend(self, records: Iterable[Mapping[str, Any]]) -> None:
         """Append multiple records to the container."""
-        for record in records:
-            self.append(record)
+        _appending.extend(self, records)
 
     # --- flush / materialize ---
 
     def flush(self) -> None:
         """Convert the current accumulator into a pending RecordBatch."""
-        if self._current_count == 0:
-            return
-
-        if self.schema is None:
-            raise ValueError(
-                "Cannot flush records without an explicit or inferred schema."
-            )
-
-        encoding_active = self.dictionary_encode and self._schema_explicit
-        if encoding_active:
-            effective_schema = self._effective_schema()
-            assert effective_schema is not None  # noqa: S101
-            effective_fields = tuple(effective_schema)
-        else:
-            effective_fields = self._schema_fields
-
-        arrays: list[pa.Array] = []
-        new_field_types: dict[str, pa.DataType] = {}
-        for index, arrow_field in enumerate(self._schema_fields):
-            values = self._accumulator[arrow_field.name]
-            if not self._schema_explicit and self.coercion_policy == "coerce":
-                values = [
-                    coerce_inferred_value(value, arrow_field.type) for value in values
-                ]
-
-            try:
-                array = pa.array(
-                    values,
-                    type=arrow_field.type,
-                    from_pandas=False,
-                )
-            except pa.ArrowInvalid as exc:
-                raise ValueError(
-                    f"Invalid data for column '{arrow_field.name}': {exc}"
-                ) from exc
-            except Exception as exc:
-                raise ValueError(
-                    f"Error processing column '{arrow_field.name}': {exc}"
-                ) from exc
-
-            if encoding_active:
-                existing_effective_type = effective_fields[index].type
-                array = maybe_dictionary_encode_array(
-                    array,
-                    arrow_field.type,
-                    existing_effective_type,
-                    self.dictionary_cardinality_threshold,
-                )
-                if not array.type.equals(existing_effective_type):
-                    new_field_types[arrow_field.name] = array.type
-
-            arrays.append(array)
-            if self.eager_clear_accumulator:
-                self._accumulator[arrow_field.name] = []
-
-        if new_field_types:
-            self._update_materialized_field_types(new_field_types)
-
-        batch_schema = self._effective_schema()
-        self.batches.append(pa.RecordBatch.from_arrays(arrays, schema=batch_schema))
-        self._pending_batch_rows += self.batches[-1].num_rows
-        self._init_accumulator()
+        _materialization.flush(self)
 
     def _flush_batch(self) -> None:
         """Backward-compatible alias for flushing the active batch."""
@@ -635,34 +468,7 @@ class ArrowRecordContainer:
 
     def to_table(self) -> pa.Table:
         """Materialize pending records and batches into a cached Arrow table."""
-        with self._lock:
-            self.flush()
-
-            if self.schema is None:
-                raise ValueError(
-                    "Cannot materialize a table without a schema or appended records."
-                )
-
-            self._align_materialized_state_to_schema()
-            effective_schema = self._effective_schema()
-
-            if not self.batches:
-                if self.table is None:
-                    self.table = pa.Table.from_batches([], schema=effective_schema)
-                return self.table
-
-            batch_table = pa.Table.from_batches(self.batches, schema=effective_schema)
-            self.batches.clear()
-            self._pending_batch_rows = 0
-            if self.table is not None:
-                merged_table = pa.concat_tables([self.table, batch_table])
-            else:
-                merged_table = batch_table
-            del batch_table
-            if self.compact_on_materialize:
-                merged_table = merged_table.combine_chunks()
-            self.table = merged_table
-            return self.table
+        return _materialization.to_table(self)
 
     def incremental_flush(self, threshold: int = 0) -> bool:
         """Flush accumulated batches into the cached table when above *threshold* rows.
@@ -674,52 +480,15 @@ class ArrowRecordContainer:
 
         Returns ``True`` when batches were actually flushed, ``False`` otherwise.
         """
-        with self._lock:
-            self.flush()
-
-            if self._pending_batch_rows <= threshold:
-                return False
-
-            if self.schema is None:
-                raise ValueError(
-                    "Cannot materialize a table without a schema or appended records."
-                )
-
-            self._align_materialized_state_to_schema()
-            effective_schema = self._effective_schema()
-
-            batch_table = pa.Table.from_batches(self.batches, schema=effective_schema)
-            self.batches.clear()
-            self._pending_batch_rows = 0
-            if self.table is not None:
-                merged_table = pa.concat_tables([self.table, batch_table])
-            else:
-                merged_table = batch_table
-            del batch_table
-            if self.compact_on_materialize:
-                merged_table = merged_table.combine_chunks()
-            self.table = merged_table
-            return True
+        return _materialization.incremental_flush(self, threshold)
 
     def to_polars_frame(self) -> pl.DataFrame:
         """Materialize the container as a Polars DataFrame."""
-        if self.table is not None and not self.batches and self._current_count == 0:
-            return cast(pl.DataFrame, pl.from_arrow(self.table))
-
-        return cast(pl.DataFrame, pl.from_arrow(self.to_table()))
+        return _materialization.to_polars_frame(self)
 
     def reset(self) -> None:
         """Clear accumulated data, batches, cached table, extras, and caches."""
-        if not self._schema_explicit:
-            self.schema = None
-            self._refresh_schema_cache()
-
-        self._init_accumulator()
-        self.batches.clear()
-        self._pending_batch_rows = 0
-        self.captured_extras.clear()
-        self.table = None
-        self._materialized_schema = None
+        _materialization.reset(self)
 
     # --- compatibility aliases ---
 
