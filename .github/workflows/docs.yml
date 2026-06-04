@@ -5,6 +5,12 @@ on:
     branches:
       - main
       - master
+    paths:
+      - .github/workflows/docs.yml
+      - docs/**
+      - mkdocs.yml
+      - pyproject.toml
+      - src/http_to_arrow/pyproject.toml
   workflow_dispatch:
 
 permissions:
