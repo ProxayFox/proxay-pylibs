@@ -30,6 +30,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PROFILER_SCRIPT = REPO_ROOT / "scripts" / "profile_http_to_arrow.py"
+DEFAULT_FIXTURE_CACHE_DIR = REPO_ROOT / "profiles" / "http_to_arrow" / "fixtures"
 
 DEFAULT_BRANCH_EXTRA = (
     "--dictionary-encode --compact-on-materialize --eager-clear-accumulator"
@@ -130,7 +131,7 @@ def sync_worktree_env(worktree_dir: Path) -> None:
 
 
 def _common_args(args: argparse.Namespace) -> list[str]:
-    return [
+    common = [
         "--rows",
         str(args.rows),
         "--scenario",
@@ -140,6 +141,40 @@ def _common_args(args: argparse.Namespace) -> list[str]:
         "--batch-size",
         str(args.batch_size),
     ]
+    if args.no_fixture_cache:
+        common.append("--no-fixture-cache")
+    else:
+        common.extend(["--fixture-cache-dir", str(args.fixture_cache_dir.resolve())])
+    return common
+
+
+def pregenerate_fixture(args: argparse.Namespace) -> None:
+    """Build the shared fixture once before either run starts.
+
+    Runs in the parent repo (the worktree doesn't exist yet) so generation
+    work happens exactly once, regardless of cache state. Both subsequent
+    profiler invocations then read the same bytes off disk.
+    """
+    cmd = [
+        "uv",
+        "run",
+        "--group",
+        "profiling",
+        "python",
+        "scripts/profile_http_to_arrow.py",
+        "--rows",
+        str(args.rows),
+        "--scenario",
+        args.scenario,
+        "--seed",
+        str(args.seed),
+        "--fixture-cache-dir",
+        str(args.fixture_cache_dir.resolve()),
+        "--generate-fixture-only",
+    ]
+    if args.regenerate_fixture:
+        cmd.append("--regenerate-fixture")
+    _run(cmd, cwd=REPO_ROOT)
 
 
 def run_profiler(
@@ -246,6 +281,29 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip `uv sync --group profiling` inside the worktree.",
     )
+
+    parser.add_argument(
+        "--fixture-cache-dir",
+        type=Path,
+        default=DEFAULT_FIXTURE_CACHE_DIR,
+        help=(
+            "Shared fixture cache directory used by both baseline and "
+            f"branch runs. Default: {DEFAULT_FIXTURE_CACHE_DIR}"
+        ),
+    )
+    parser.add_argument(
+        "--no-fixture-cache",
+        action="store_true",
+        help=(
+            "Disable fixture caching. Each side will regenerate records "
+            "in-memory, which is slower but useful as a sanity check."
+        ),
+    )
+    parser.add_argument(
+        "--regenerate-fixture",
+        action="store_true",
+        help="Force fixture regeneration even on a cache hit.",
+    )
     return parser
 
 
@@ -285,6 +343,13 @@ def main(argv: list[str] | None = None) -> int:
         install_profiler_into_worktree(worktree_dir)
         if not args.skip_uv_sync:
             sync_worktree_env(worktree_dir)
+
+        if not args.no_fixture_cache:
+            print()
+            print("#" * 72)
+            print("# Pre-generating shared fixture")
+            print("#" * 72)
+            pregenerate_fixture(args)
 
         common = _common_args(args)
 

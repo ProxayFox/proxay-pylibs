@@ -81,6 +81,31 @@ uv run --group profiling python scripts/profile_http_to_arrow.py \
   --scenario nested-http
 ```
 
+### Fixture caching
+
+Generated records are cached as gzipped JSONL files keyed by
+`(scenario, rows, seed)` so a 1M+ row run is generated once and reused on
+every subsequent invocation (and across both sides of a comparison).
+
+- Default cache directory: `profiles/http_to_arrow/fixtures/` (git-ignored).
+- Filename pattern: `<scenario>_rows<N>_seed<S>.jsonl.gz`.
+- The cache preserves the JSON-dict shape on purpose so the profiler still
+  exercises the `ArrowRecordContainer` coercion path. JSON-parse cost is
+  rolled into `ingest_seconds`; it's constant across runs reading the same
+  file, so deltas remain meaningful.
+- Pre-warm a cache without running the benchmark:
+
+  ```bash
+  uv run --group profiling python scripts/profile_http_to_arrow.py \
+    --rows 1000000 --scenario nested-http \
+    --generate-fixture-only
+  ```
+
+- Force a rebuild: `--regenerate-fixture`.
+- Skip the cache entirely (stream from the in-memory generator):
+  `--no-fixture-cache`.
+- Custom location: `--fixture-cache-dir PATH` or `--fixture-path PATH`.
+
 ## `compare_http_to_arrow.py`
 
 Orchestrates a two-sided comparison without leaving your feature branch.
@@ -140,6 +165,10 @@ just profile-http-to-arrow-vs origin/main 1000000 --merge-base
 - Summaries land in `profiles/http_to_arrow/` (git-ignored). The baseline
   filename includes the resolved short SHA so repeated runs against
   different commits don't overwrite each other.
+- The shared fixture is pre-generated once in the parent repo before either
+  side runs, then both baseline and branch read the same bytes from
+  `profiles/http_to_arrow/fixtures/`. Pass `--regenerate-fixture` to force
+  a rebuild or `--no-fixture-cache` to skip caching entirely.
 
 ## Interpreting the summary
 

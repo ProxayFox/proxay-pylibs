@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import gzip
 import json
 import platform
 import random
@@ -39,6 +40,9 @@ import pyarrow as pa
 
 from http_to_arrow import ArrowRecordContainer
 
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_FIXTURE_CACHE_DIR = REPO_ROOT / "profiles" / "http_to_arrow" / "fixtures"
 
 # ----------------------------- schema + fixtures -----------------------------
 
@@ -292,6 +296,78 @@ def iter_records(
         yield generate_record(index, rng, scenario)
 
 
+# ----------------------------- fixture caching ------------------------------
+
+# Cache layout: one gzipped JSONL file per ``(scenario, rows, seed)`` tuple.
+# JSONL keeps the on-disk shape identical to the dicts the generator yields,
+# so reading from the cache exercises the same ``ArrowRecordContainer``
+# coercion path we are profiling. An Arrow-format cache would bypass that
+# path and invalidate the measurement.
+
+
+def default_fixture_path(
+    cache_dir: Path, *, scenario: str, rows: int, seed: int
+) -> Path:
+    """Deterministic cache path for the given generation parameters."""
+    return cache_dir / f"{scenario}_rows{rows}_seed{seed}.jsonl.gz"
+
+
+def write_fixture(path: Path, records: Iterable[dict[str, Any]]) -> int:
+    """Stream-write ``records`` to a gzipped JSONL file. Returns row count.
+
+    Writes to a sibling ``.partial`` file first and renames on success so a
+    crashed generation does not leave a half-written cache behind.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_suffix(path.suffix + ".partial")
+    count = 0
+    try:
+        with gzip.open(partial, "wt", encoding="utf-8") as fh:
+            for record in records:
+                fh.write(json.dumps(record, separators=(",", ":")))
+                fh.write("\n")
+                count += 1
+        partial.replace(path)
+    except BaseException:
+        if partial.exists():
+            partial.unlink(missing_ok=True)
+        raise
+    return count
+
+
+def read_fixture(path: Path) -> Iterator[dict[str, Any]]:
+    """Stream-read a gzipped JSONL fixture, yielding one dict per line."""
+    with gzip.open(path, "rt", encoding="utf-8") as fh:
+        for line in fh:
+            if line:
+                yield json.loads(line)
+
+
+def ensure_fixture(
+    path: Path,
+    *,
+    scenario: str,
+    rows: int,
+    seed: int,
+    regenerate: bool,
+) -> bool:
+    """Ensure ``path`` exists, generating it on miss. Returns True on cache hit."""
+    if path.exists() and not regenerate:
+        return True
+    print(f"Generating fixture: {path} ({rows:,} rows, scenario={scenario})")
+    gen_start = time.perf_counter()
+    written = write_fixture(
+        path, iter_records(num_rows=rows, scenario=scenario, seed=seed)
+    )
+    gen_seconds = time.perf_counter() - gen_start
+    size = path.stat().st_size
+    print(
+        f"  wrote {written:,} rows in {gen_seconds:,.2f}s "
+        f"({_format_bytes(size)} on disk)"
+    )
+    return False
+
+
 # --------------------------------- metrics ----------------------------------
 
 
@@ -325,6 +401,9 @@ class Metrics:
     platform: str = ""
     git_commit: str | None = None
     captured_at: str = ""
+
+    fixture_path: str | None = None
+    fixture_cache_hit: bool | None = None
 
     def to_dict(self) -> dict[str, Any]:
         data = dataclasses.asdict(self)
@@ -403,6 +482,35 @@ def _summarize_table(table: pa.Table) -> tuple[int, tuple[str, ...]]:
     return max_chunks, tuple(dictionary_columns)
 
 
+def _resolve_fixture(
+    args: argparse.Namespace,
+) -> tuple[Path | None, bool]:
+    """Resolve fixture path + cache-hit state per the CLI flags.
+
+    Returns ``(path, cache_hit)``. ``path`` is ``None`` when caching is
+    disabled. ``cache_hit`` is meaningless in that case (returned as False).
+    """
+    if args.no_fixture_cache:
+        return None, False
+    if args.fixture_path is not None:
+        path = args.fixture_path
+    else:
+        path = default_fixture_path(
+            args.fixture_cache_dir,
+            scenario=args.scenario,
+            rows=args.rows,
+            seed=args.seed,
+        )
+    hit = ensure_fixture(
+        path,
+        scenario=args.scenario,
+        rows=args.rows,
+        seed=args.seed,
+        regenerate=args.regenerate_fixture,
+    )
+    return path, hit
+
+
 def run_benchmark(args: argparse.Namespace) -> Metrics:
     """Execute one benchmark run and return the captured metrics."""
     schema = build_http_event_schema()
@@ -428,7 +536,16 @@ def run_benchmark(args: argparse.Namespace) -> Metrics:
         **extra_kwargs,
     )
 
-    records = iter_records(num_rows=args.rows, scenario=args.scenario, seed=args.seed)
+    fixture_path, cache_hit = _resolve_fixture(args)
+    if fixture_path is not None:
+        state = "cache hit" if cache_hit else "generated"
+        print(f"Fixture: {fixture_path} ({state})")
+        records: Iterable[dict[str, Any]] = read_fixture(fixture_path)
+    else:
+        print("Fixture: <disabled> (streaming in-memory generator)")
+        records = iter_records(
+            num_rows=args.rows, scenario=args.scenario, seed=args.seed
+        )
 
     ingest_start = time.perf_counter()
     _ingest(container, records, incremental_threshold=args.incremental_threshold)
@@ -465,6 +582,8 @@ def run_benchmark(args: argparse.Namespace) -> Metrics:
         platform=platform.platform(),
         git_commit=_git_commit(),
         captured_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        fixture_path=str(fixture_path) if fixture_path is not None else None,
+        fixture_cache_hit=cache_hit if fixture_path is not None else None,
     )
 
 
@@ -608,6 +727,48 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to a previous JSON summary to print deltas against.",
     )
+
+    parser.add_argument(
+        "--fixture-cache-dir",
+        type=Path,
+        default=DEFAULT_FIXTURE_CACHE_DIR,
+        help=(
+            "Directory used to cache generated record fixtures. Files are "
+            "keyed by (scenario, rows, seed). "
+            f"Default: {DEFAULT_FIXTURE_CACHE_DIR}"
+        ),
+    )
+    parser.add_argument(
+        "--fixture-path",
+        type=Path,
+        default=None,
+        help=(
+            "Explicit fixture file path. Overrides --fixture-cache-dir + the "
+            "auto-generated name. Created on miss."
+        ),
+    )
+    parser.add_argument(
+        "--no-fixture-cache",
+        action="store_true",
+        help=(
+            "Disable on-disk fixture caching and stream records from the "
+            "in-memory generator instead."
+        ),
+    )
+    parser.add_argument(
+        "--regenerate-fixture",
+        action="store_true",
+        help="Force regeneration even if a cached fixture already exists.",
+    )
+    parser.add_argument(
+        "--generate-fixture-only",
+        action="store_true",
+        help=(
+            "Resolve and (re)generate the fixture file, then exit without "
+            "running the benchmark. Useful for pre-warming caches before a "
+            "comparison."
+        ),
+    )
     return parser
 
 
@@ -617,6 +778,17 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.rows <= 0:
         parser.error("--rows must be positive")
+
+    if args.generate_fixture_only:
+        if args.no_fixture_cache:
+            parser.error(
+                "--generate-fixture-only is incompatible with --no-fixture-cache"
+            )
+        path, hit = _resolve_fixture(args)
+        assert path is not None  # noqa: S101 - guarded above
+        state = "cache hit" if hit else "generated"
+        print(f"Fixture ready: {path} ({state})")
+        return 0
 
     metrics = run_benchmark(args)
     print_summary(metrics)
