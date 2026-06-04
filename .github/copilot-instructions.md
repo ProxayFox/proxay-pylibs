@@ -42,6 +42,8 @@
 - Use `uv` for installs and commands. Preferred bootstrap is
  `uv sync --all-packages --extra dev`.
 - The devcontainer also creates `uv-sync-dev` and `uv-sync-all` helper commands.
+- Always run `just quality` before completing tasks to run the full suite of
+ linters, formatters, type checks, and unit tests.
 - Prefer the repo shortcuts in `justfile` when they fit the task: `just lint`,
  `just format`, `just typecheck`, and `just test`.
 - The active formatter and linter workflow is Ruff-based through `justfile`.

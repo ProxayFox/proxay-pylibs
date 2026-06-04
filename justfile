@@ -82,3 +82,15 @@ docs-serve:
 
 docs-validate:
     uv run --group docs mkdocs build --strict
+
+# --- Profiling (manual; not part of `quality`) ---
+profile-http-to-arrow rows="1000000" +args="":
+    uv run --group profiling python scripts/profile_http_to_arrow.py --rows {{rows}} {{args}}
+
+profile-http-to-arrow-scalene rows="1000000" out="profiles/http_to_arrow/scalene_nested.html" +args="":
+    mkdir -p "$(dirname {{out}})"
+    uv run --group profiling scalene --html --outfile {{out}} scripts/profile_http_to_arrow.py --rows {{rows}} {{args}}
+
+profile-http-to-arrow-pyinstrument rows="1000000" out="profiles/http_to_arrow/pyinstrument_nested.html" +args="":
+    mkdir -p "$(dirname {{out}})"
+    uv run --group profiling python -m pyinstrument --html -o {{out}} scripts/profile_http_to_arrow.py --rows {{rows}} {{args}}
