@@ -31,6 +31,8 @@ import platform
 import shutil
 import sys
 import tempfile
+import importlib.util as _importlib_util
+import types as _types
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -42,7 +44,11 @@ _SCRIPTS_DIR = Path(__file__).resolve().parent
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-import compare_http_to_arrow as cmp  # noqa: E402  (sys.path manipulation above)
+_cmp_path = _SCRIPTS_DIR / "compare_http_to_arrow.py"
+_cmp_spec = _importlib_util.spec_from_file_location("compare_http_to_arrow", _cmp_path)
+assert _cmp_spec is not None and _cmp_spec.loader is not None
+cmp: _types.ModuleType = _importlib_util.module_from_spec(_cmp_spec)
+_cmp_spec.loader.exec_module(cmp)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_FIXTURE_CACHE_DIR = REPO_ROOT / "profiles" / "http_to_arrow" / "fixtures"
@@ -327,7 +333,7 @@ def _render_markdown_table(
 ) -> str:
     lines = [
         "| " + " | ".join(headers) + " |",
-        "|" + "|".join("---" for _ in headers) + "|",
+        "| " + " | ".join("---" for _ in headers) + " |",
     ]
     for row in rows:
         lines.append("| " + " | ".join(row) + " |")
@@ -427,7 +433,7 @@ def render_markdown(
     parts.append(
         "| label | dictionary_encode | compact_on_materialize | eager_clear_accumulator |"
     )
-    parts.append("|---|---|---|---|")
+    parts.append("| --- | --- | --- | --- |")
     for config in DEFAULT_CONFIGS:
         parts.append(
             f"| `{config.label}` | "
