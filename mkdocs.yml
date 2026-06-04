@@ -1,0 +1,97 @@
+site_name: http-to-arrow
+site_description: Stream HTTP data to Apache Arrow format for efficient processing and analytics.
+site_url: https://proxayfox.github.io/proxay-pylibs/
+repo_url: https://github.com/ProxayFox/proxay-pylibs
+repo_name: ProxayFox/proxay-pylibs
+edit_uri: edit/main/
+docs_dir: docs
+site_dir: site
+
+theme:
+  name: material
+  language: en
+  features:
+    - content.code.copy
+    - content.tabs.link
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Installation: installation.md
+  - Usage: usage.md
+  - Configuration: configuration.md
+  - Examples: examples.md
+  - Schema Inference: schema-inference.md
+  - Memory Tuning: memory-tuning.md
+  - Errors And Policies: errors-and-policies.md
+  - API Reference:
+      - Overview: api/index.md
+      - Package Exports: api/package.md
+      - Container: api/container.md
+      - Policies: api/policies.md
+      - Coercion Helpers: api/coercion.md
+      - Schema Helpers: api/schema.md
+      - Encoding Helpers: api/encoding.md
+  - Development: development.md
+  - Changelog: changelog.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src/http_to_arrow/src
+          options:
+            docstring_style: google
+            show_source: true
+            show_root_heading: true
+            show_root_full_path: false
+            merge_init_into_class: true
+            inherited_members: true
+            members_order: source
+
+watch:
+  - src/http_to_arrow/src/http_to_arrow
