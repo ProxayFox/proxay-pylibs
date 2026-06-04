@@ -49,11 +49,11 @@ class ArrowRecordContainer:
     )
     batch_size: int = field(
         default=128000,
-        doc="Number of records to process in a batch during extraction.",
+        doc="Number of accumulated records that triggers a flush to a RecordBatch.",
     )
     unknown_field_policy: UnknownFieldPolicy = field(
         default="drop",
-        doc="How to handle keys that are not present in the schema.",
+        doc="How to handle explicit-schema record keys that are not schema fields.",
     )
     missing_field_policy: MissingFieldPolicy = field(
         default="null",
@@ -79,15 +79,16 @@ class ArrowRecordContainer:
         default=False,
         doc=(
             "Opt-in dictionary encoding for low-cardinality string columns when an "
-            "explicit schema is supplied. Encoded columns return dictionary-typed "
-            "Arrow arrays."
+            "explicit schema is supplied. Qualifying columns are flushed as "
+            "dictionary-typed Arrow arrays."
         ),
     )
     dictionary_cardinality_threshold: float = field(
         default=0.5,
         doc=(
             "Maximum unique/row ratio at which a string column will be dictionary "
-            "encoded. Must be in [0.0, 1.0]. Ignored when dictionary_encode is False."
+            "encoded. Must be in [0.0, 1.0]. Ignored when dictionary_encode is False "
+            "or no explicit schema is supplied."
         ),
     )
     compact_on_materialize: bool = field(
@@ -105,28 +106,99 @@ class ArrowRecordContainer:
         default_factory=list,
         init=False,
         repr=False,
-        doc="Optional capture area for extra fields when unknown_field_policy='capture'.",
+        doc=(
+            "Captured explicit-schema extra fields when unknown_field_policy='capture'."
+        ),
     )
     _schema_fields: tuple[pa.Field, ...] = field(
         default_factory=tuple,
         init=False,
         repr=False,
+        doc=(
+            "Cached schema fields for quick access during appends. Kept in sync with "
+            "self.schema and used for field order during flushes."
+        ),
     )
     _schema_field_names: frozenset[str] = field(
         default_factory=frozenset,
         init=False,
         repr=False,
+        doc="Cached schema field names for quick access during appends.",
     )
-    _uses_default_normalizer: bool = field(default=False, init=False, repr=False)
-    _schema_explicit: bool = field(default=False, init=False, repr=False)
+    _uses_default_normalizer: bool = field(
+        default=False,
+        init=False,
+        repr=False,
+        doc=(
+            "Whether the normalizer method is the default no-op implementation, used to "
+            "optimize record preparation by avoiding unnecessary copying of dict records."
+        ),
+    )
+    _schema_explicit: bool = field(
+        default=False,
+        init=False,
+        repr=False,
+        doc=(
+            "Whether the container schema was explicitly provided at initialization, as "
+            "opposed to being inferred from appended records. This controls whether "
+            "schema growth is allowed during appends and whether dictionary encoding can "
+            "be applied."
+        ),
+    )
     _inferred_name_map: dict[str, str] = field(
-        default_factory=dict, init=False, repr=False
+        default_factory=dict,
+        init=False,
+        repr=False,
+        doc=(
+            "Mapping of lowercase field names to their first-seen canonical spelling, "
+            "used by inferred-mode key resolution when case_insensitive_keys=True."
+        ),
     )
-    _accumulator: dict[str, list] = field(default_factory=dict, init=False, repr=False)
-    _current_count: int = field(default=0, init=False, repr=False)
-    _pending_batch_rows: int = field(default=0, init=False, repr=False)
-    _materialized_schema: pa.Schema | None = field(default=None, init=False, repr=False)
-    _lock: threading.Lock = field(default_factory=threading.Lock)
+    _accumulator: dict[str, list] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+        doc=(
+            "In-memory accumulator for incoming records, organized as lists of values "
+            "for each schema field. Flushed into batches when batch_size is reached."
+        ),
+    )
+    _current_count: int = field(
+        default=0,
+        init=False,
+        repr=False,
+        doc=(
+            "Number of records currently held in the accumulator, used to determine "
+            "when to flush into a batch."
+        ),
+    )
+    _pending_batch_rows: int = field(
+        default=0,
+        init=False,
+        repr=False,
+        doc=(
+            "Total number of rows across all batches that have been flushed but not yet "
+            "materialized into the cached table, used to trigger incremental flushes."
+        ),
+    )
+    _materialized_schema: pa.Schema | None = field(
+        default=None,
+        init=False,
+        repr=False,
+        doc=(
+            "Cached effective schema reflecting any promoted dictionary types for "
+            "flushed batches and the cached table. When dictionary encoding is enabled, "
+            "this schema is used for subsequent batches to ensure type compatibility."
+        ),
+    )
+    _lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        doc=(
+            "Thread lock used by materialization paths that flush and merge pending "
+            "batches. Direct appends and direct flush() calls are not synchronized and "
+            "should be externally coordinated in multithreaded contexts."
+        ),
+    )
 
     # --- lifecycle ---
 
@@ -155,7 +227,7 @@ class ArrowRecordContainer:
         self._init_accumulator()
 
     def _effective_schema(self) -> pa.Schema | None:
-        """Return the schema used for flushed batches and the cached table.
+        """Return the schema used for flushed batches and cached tables.
 
         When dictionary encoding has not yet promoted any columns this is
         identical to ``self.schema``. When encoding has been applied the
@@ -167,7 +239,7 @@ class ArrowRecordContainer:
     def _update_materialized_field_types(
         self, new_field_types: dict[str, pa.DataType]
     ) -> None:
-        """Record encoded field types in the materialized schema cache."""
+        """Record encoded field types in the effective schema cache."""
         if not new_field_types or self.schema is None:
             return
 
@@ -203,7 +275,7 @@ class ArrowRecordContainer:
         }
 
     def _init_accumulator(self) -> None:
-        """Initialize empty lists for each schema field."""
+        """Initialize empty lists for each schema field and reset the row count."""
         self._accumulator = {
             arrow_field.name: [] for arrow_field in self._schema_fields
         }
@@ -353,7 +425,7 @@ class ArrowRecordContainer:
         return lower_key_map.get(field_name.lower())
 
     def _handle_unknown_fields(self, extras: dict[str, Any]) -> None:
-        """Apply configured policy for extra keys not present in the schema."""
+        """Apply the configured explicit-schema policy for extra keys."""
         if not extras:
             return
 
@@ -365,7 +437,7 @@ class ArrowRecordContainer:
             self.captured_extras.append(extras)
 
     def _append_exact_key_record(self, record: Mapping[str, Any]) -> bool:
-        """Fast path for records whose keys already match the schema exactly."""
+        """Fast path for records that contain no keys outside the schema."""
         if any(key not in self._schema_field_names for key in record):
             return False
 
@@ -481,7 +553,7 @@ class ArrowRecordContainer:
     # --- flush / materialize ---
 
     def flush(self) -> None:
-        """Convert accumulated records into a RecordBatch."""
+        """Convert the current accumulator into a pending RecordBatch."""
         if self._current_count == 0:
             return
 
@@ -550,7 +622,7 @@ class ArrowRecordContainer:
         self.flush()
 
     def to_table(self) -> pa.Table:
-        """Materialize any pending batches into a cached Arrow table."""
+        """Materialize pending records and batches into a cached Arrow table."""
         with self._lock:
             self.flush()
 
@@ -625,7 +697,7 @@ class ArrowRecordContainer:
         return cast(pl.DataFrame, pl.from_arrow(self.to_table()))
 
     def reset(self) -> None:
-        """Clear accumulated data, batches, cached table, and captured extras."""
+        """Clear accumulated data, batches, cached table, extras, and caches."""
         if not self._schema_explicit:
             self.schema = None
             self._refresh_schema_cache()
@@ -640,7 +712,7 @@ class ArrowRecordContainer:
     # --- compatibility aliases ---
 
     def to_arrow(self) -> pa.Table:
-        """Backward-compatible alias for materializing the cached Arrow table."""
+        """Backward-compatible alias for materializing an Arrow table."""
         return self.to_table()
 
     def to_polars(self) -> pl.DataFrame:
