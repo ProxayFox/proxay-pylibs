@@ -64,19 +64,32 @@ def test_extend_applies_backpressure_when_queue_is_full() -> None:
     async def scenario() -> None:
         stream = ArrowIPCStream(schema=schema, queue_maxsize=1)
 
-        # First page fills the bounded queue.
+        # First page fills the bounded queue (maxsize=1).
         await stream.extend([{"id": 1}])
 
-        # The second page must block because the consumer has not drained yet.
+        # A second page cannot be enqueued until the consumer drains an item, so
+        # the producer coroutine stays pending under backpressure. Pumping the
+        # loop a few times is enough to prove it does not complete.
         second = asyncio.create_task(stream.extend([{"id": 2}]))
-        await asyncio.sleep(0)
-        with pytest.raises(asyncio.TimeoutError):
-            await asyncio.wait_for(asyncio.shield(second), timeout=0.05)
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert not second.done()
 
-        # Draining one queue item lets the blocked producer proceed.
-        assert stream._queue.get_nowait() == [{"id": 1}]
-        await asyncio.wait_for(second, timeout=1.0)
-        assert stream._queue.get_nowait() == [{"id": 2}]
+        # Draining through the public consumer unblocks the producer; signal end
+        # once the previously blocked page has been accepted so the stream ends.
+        async def finish() -> None:
+            await second
+            await stream.end()
+
+        finish_task = asyncio.create_task(finish())
+        chunks = [chunk async for chunk in stream.ipc_chunks()]
+        await finish_task
+
+        # The producer unblocked once the consumer drained, and every row
+        # survived the round trip.
+        assert second.done()
+        table = _read_table(b"".join(chunks))
+        assert table.column("id").to_pylist() == [1, 2]
 
     asyncio.run(scenario())
 
