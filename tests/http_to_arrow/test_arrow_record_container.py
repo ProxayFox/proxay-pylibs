@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 from datetime import datetime
 from typing import Any, Mapping, cast, get_args
 
@@ -39,6 +40,42 @@ def test_constructor_adopts_cached_table_schema_in_inferred_mode() -> None:
 
     assert container.schema is not None
     assert container.to_table().to_pydict() == {"id": [10, 11], "name": [None, "beta"]}
+
+
+@pytest.mark.unit
+def test_constructor_accepts_positional_schema() -> None:
+    schema = pa.schema([pa.field("id", pa.int64())])
+
+    container = ArrowRecordContainer(schema)
+
+    assert container.schema is schema
+    assert container.table is None
+    assert container.batch_size == 128000
+    assert isinstance(container.batch_size, int)
+
+    container.append({"id": 1})
+    assert container.to_table().to_pydict() == {"id": [1]}
+
+
+@pytest.mark.unit
+def test_constructor_accepts_original_positional_order() -> None:
+    schema = pa.schema([pa.field("id", pa.int64())])
+
+    container = ArrowRecordContainer(schema, None, 256)
+
+    assert container.schema is schema
+    assert container.table is None
+    assert container.batch_size == 256
+
+
+@pytest.mark.unit
+def test_constructor_signature_is_runtime_introspectable() -> None:
+    signature = inspect.signature(ArrowRecordContainer)
+
+    assert list(signature.parameters)[:3] == ["schema", "table", "batch_size"]
+    assert "unknown_field_policy" in signature.parameters
+    assert "batches" in signature.parameters
+    assert "compact_on_materialize" in signature.parameters
 
 
 @pytest.mark.unit
