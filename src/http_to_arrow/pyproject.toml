@@ -4,20 +4,45 @@ build-backend = "uv_build"
 
 [project]
 name = "http-to-arrow"
-version = "0.2.0"
-description = "Stream HTTP data to Apache Arrow format for efficient processing and analytics."
+version = "0.2.1"
+description = "Batch mapping records into Apache Arrow tables and IPC streams for Python ETL pipelines."
 authors = [{ name = "ProxayFox", email = "28168887+ProxayFox@users.noreply.github.com" }]
 requires-python = ">=3.14"
 readme = "README.md"
 license = "MIT"
+keywords = [
+    "apache-arrow",
+    "arrow",
+    "pyarrow",
+    "polars",
+    "etl",
+    "ingestion",
+    "streaming",
+    "arrow-ipc",
+    "schema-inference",
+    "columnar",
+    "data-processing",
+    "batch-processing",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "polars>=1.39.3",
     "pyarrow>=23.0.1",
 ]
 
 [project.urls]
-Homepage = "https://github.com/ProxayFox/proxay-pylibs/tree/main/src/http_to_arrow"
+Homepage = "https://proxayfox.github.io/proxay-pylibs/"
+Documentation = "https://proxayfox.github.io/proxay-pylibs/"
+Source = "https://github.com/ProxayFox/proxay-pylibs/tree/main/src/http_to_arrow"
 Issues = "https://github.com/ProxayFox/proxay-pylibs/issues"
-
-[tool.setuptools]
-package-dir = { "http_to_arrow" = "." }
+Changelog = "https://proxayfox.github.io/proxay-pylibs/changelog/"
+"Release Notes" = "https://github.com/ProxayFox/proxay-pylibs/releases"
