@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -176,9 +177,9 @@ class ArrowRecordContainerSettings:
             "the cached table to reduce chunk fragmentation across flushes."
         ),
     )
-    batches: list[pa.RecordBatch] = field(
-        default_factory=list,
-        doc="List of record batches pending materialization into the cached table.",
+    batches: deque[pa.RecordBatch] = field(
+        default_factory=deque,
+        doc="Deque of record batches pending materialization into the cached table.",
     )
 
 

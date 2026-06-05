@@ -25,7 +25,7 @@ def test_drain_batches_returns_batches_and_clears_pending_state() -> None:
     assert len(drained) == 1
     assert drained[0].num_rows == 2
     assert drained[0].column("id").to_pylist() == [1, 2]
-    assert container.batches == []
+    assert not container.batches
     # Accumulator row remains untouched.
     assert container.batch_total_rows == 1
 
@@ -52,7 +52,7 @@ def test_flush_partial_returns_short_batch_and_clears_accumulator() -> None:
     assert batch.num_rows == 2
     assert batch.column("id").to_pylist() == [1, 2]
     # Returned batch must not linger in pending state.
-    assert container.batches == []
+    assert not container.batches
     assert container.batch_total_rows == 0
 
 
@@ -99,7 +99,7 @@ def test_iter_batches_yields_in_order_and_releases_each_batch() -> None:
         assert len(container.batches) == 3 - len(collected)
 
     assert collected == [1, 2, 3]
-    assert container.batches == []
+    assert not container.batches
     assert container.batch_total_rows == 0
 
 
@@ -117,7 +117,7 @@ def test_iter_batches_does_not_flush_the_accumulator() -> None:
     assert len(drained) == 1
     assert drained[0].num_rows == 2
     # Accumulator row is still pending and was not flushed by iter_batches.
-    assert container.batches == []
+    assert not container.batches
     assert container.batch_total_rows == 1
 
     # The remaining row still materializes correctly afterwards.

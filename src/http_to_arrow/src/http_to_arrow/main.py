@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterable, Iterator, Mapping
@@ -77,7 +78,7 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
         self.dictionary_encode = dictionary_encode
         self.dictionary_cardinality_threshold = dictionary_cardinality_threshold
         self.compact_on_materialize = compact_on_materialize
-        self.batches = [] if batches is None else batches
+        self.batches = deque() if batches is None else deque(batches)
         self.captured_extras = []
         self._schema_fields = ()
         self._schema_field_names = frozenset()
@@ -303,10 +304,10 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
             self.table = self._align_table_to_schema(self.table, effective_schema)
 
         if any(not batch.schema.equals(effective_schema) for batch in self.batches):
-            self.batches = [
+            self.batches = deque(
                 self._align_batch_to_schema(batch, effective_schema)
                 for batch in self.batches
-            ]
+            )
 
     # ----------------------------------------------------------------- appending
 
@@ -384,9 +385,9 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
         """
         with self._lock:
             batches = self.batches
-            self.batches = []
+            self.batches = deque()
             self._pending_batch_rows = 0
-        return batches
+        return list(batches)
 
     def flush_partial(self) -> pa.RecordBatch | None:
         """Flush the in-flight accumulator and return the resulting batch.
@@ -416,7 +417,7 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
             with self._lock:
                 if not self.batches:
                     break
-                batch = self.batches.pop(0)
+                batch = self.batches.popleft()
                 self._pending_batch_rows -= batch.num_rows
             yield batch
 
