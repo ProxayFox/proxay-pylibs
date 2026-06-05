@@ -1,8 +1,11 @@
-"""Base classes and shared functionality for ArrowRecordContainer implementations."""
+"""Base field groups for ``ArrowRecordContainer`` implementations."""
+
+from __future__ import annotations
 
 import threading
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
+
 from http_to_arrow._policies import (
     CoercionPolicy,
     MissingFieldPolicy,
@@ -13,14 +16,18 @@ if TYPE_CHECKING:
     import pyarrow as pa
 
 
-@dataclass
+@dataclass(init=False)
 class BaseArrowRecordContainer:
-    """Base class for ArrowRecordContainer.
+    """Internal mutable state fields for ``ArrowRecordContainer``."""
 
-    This class is intended to be used as a base for the actual ArrowRecordContainer
-    implementations, providing common functionality and structure.
-    """
-
+    captured_extras: list[dict[str, Any]] = field(
+        default_factory=list,
+        init=False,
+        repr=False,
+        doc=(
+            "Captured explicit-schema extra fields when unknown_field_policy='capture'."
+        ),
+    )
     _schema_fields: tuple[pa.Field, ...] = field(
         default_factory=tuple,
         init=False,
@@ -112,13 +119,9 @@ class BaseArrowRecordContainer:
     )
 
 
-@dataclass
+@dataclass(init=False)
 class ArrowRecordContainerSettings:
-    """Settings for ArrowRecordContainer.
-
-    This class is intended to be used as a base for the actual ArrowRecordContainer
-    implementations, providing common settings and configuration options.
-    """
+    """Configuration fields for ``ArrowRecordContainer``."""
 
     batch_size: int = field(
         default=128000,
@@ -175,11 +178,9 @@ class ArrowRecordContainerSettings:
         default_factory=list,
         doc="List of record batches pending materialization into the cached table.",
     )
-    captured_extras: list[dict[str, Any]] = field(
-        default_factory=list,
-        init=False,
-        repr=False,
-        doc=(
-            "Captured explicit-schema extra fields when unknown_field_policy='capture'."
-        ),
-    )
+
+
+__all__ = [
+    "ArrowRecordContainerSettings",
+    "BaseArrowRecordContainer",
+]

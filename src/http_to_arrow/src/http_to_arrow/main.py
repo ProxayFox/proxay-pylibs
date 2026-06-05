@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Iterable, Mapping
@@ -9,9 +10,9 @@ from typing import Any, Iterable, Mapping
 import polars as pl
 import pyarrow as pa
 
-from http_to_arrow.base import BaseArrowRecordContainer, ArrowRecordContainerSettings
 from http_to_arrow import _appending
 from http_to_arrow import _materialization
+from http_to_arrow.base import BaseArrowRecordContainer, ArrowRecordContainerSettings
 from http_to_arrow._coercion import (
     coerce_inferred_value,
     coerce_timestamp_value,
@@ -33,7 +34,7 @@ from http_to_arrow._schema import (
 )
 
 
-@dataclass
+@dataclass(init=False)
 class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSettings):
     """Batch incoming records into Arrow tables using an explicit or inferred schema."""
 
@@ -49,6 +50,46 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
     )
 
     # --- lifecycle ---
+
+    def __init__(
+        self,
+        schema: pa.Schema | None = None,
+        table: pa.Table | None = None,
+        batch_size: int = 128000,  # Results in ~700MB batches in profiler test
+        unknown_field_policy: UnknownFieldPolicy = "drop",
+        missing_field_policy: MissingFieldPolicy = "null",
+        coercion_policy: CoercionPolicy = "coerce",
+        case_insensitive_keys: bool = True,
+        eager_clear_accumulator: bool = False,
+        dictionary_encode: bool = False,
+        dictionary_cardinality_threshold: float = 0.5,
+        compact_on_materialize: bool = False,
+        batches: list[pa.RecordBatch] | None = None,
+    ) -> None:
+        self.schema = schema
+        self.table = table
+        self.batch_size = batch_size
+        self.unknown_field_policy = unknown_field_policy
+        self.missing_field_policy = missing_field_policy
+        self.coercion_policy = coercion_policy
+        self.case_insensitive_keys = case_insensitive_keys
+        self.eager_clear_accumulator = eager_clear_accumulator
+        self.dictionary_encode = dictionary_encode
+        self.dictionary_cardinality_threshold = dictionary_cardinality_threshold
+        self.compact_on_materialize = compact_on_materialize
+        self.batches = [] if batches is None else batches
+        self.captured_extras = []
+        self._schema_fields = ()
+        self._schema_field_names = frozenset()
+        self._uses_default_normalizer = False
+        self._schema_explicit = False
+        self._inferred_name_map = {}
+        self._accumulator = {}
+        self._current_count = 0
+        self._pending_batch_rows = 0
+        self._materialized_schema = None
+        self._lock = threading.Lock()
+        self.__post_init__()
 
     def __post_init__(self) -> None:
         if not 0.0 <= self.dictionary_cardinality_threshold <= 1.0:
