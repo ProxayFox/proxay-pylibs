@@ -44,11 +44,13 @@ nav:
   - Examples: examples.md
   - Schema Inference: schema-inference.md
   - Memory Tuning: memory-tuning.md
+  - Streaming IPC: streaming-ipc.md
   - Errors And Policies: errors-and-policies.md
   - API Reference:
       - Overview: api/index.md
       - Package Exports: api/package.md
       - Container: api/container.md
+      - Streaming: api/streaming.md
       - Policies: api/policies.md
       - Coercion Helpers: api/coercion.md
       - Schema Helpers: api/schema.md
