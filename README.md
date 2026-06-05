@@ -156,10 +156,14 @@ that follows the `http-to-arrow-vX.Y.Z` naming convention
 
 ### Release checklist
 
-1. Update the `version` field in `src/http_to_arrow/pyproject.toml` to the new
-   semantic version.
-2. Commit and push that change.
-3. Create a GitHub Release with tag `http-to-arrow-vX.Y.Z` where `X.Y.Z`
+1. Update `docs/changelog.md` with the release notes for the new semantic
+   version.
+2. Update the `version` field in `src/http_to_arrow/pyproject.toml` and refresh
+   `uv.lock`.
+3. Run the focused release checks locally: lint, format check, type check,
+   tests, package build, and distribution verification for `http-to-arrow`.
+4. Commit and push those changes.
+5. Create a GitHub Release with tag `http-to-arrow-vX.Y.Z` where `X.Y.Z`
    matches the version set in the previous step.
-4. Publish the release. The workflow runs automatically and will fail fast if
+6. Publish the release. The workflow runs automatically and will fail fast if
    the tag version and the pyproject.toml version do not match.

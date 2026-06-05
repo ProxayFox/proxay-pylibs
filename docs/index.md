@@ -87,7 +87,7 @@ Expected output:
 
 ## Status
 
-The current package version is `0.1.3` and requires Python `>=3.14`. The public
+The current package version is `0.2.0` and requires Python `>=3.14`. The public
 library surface is intentionally small: `ArrowRecordContainer`,
 `ArrowIPCStream`, `IPCStreamSink`, and the policy aliases exported by
 `http_to_arrow`.

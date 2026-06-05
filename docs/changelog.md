@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.3
+## 0.2.0
 
 - Added async Arrow IPC streaming through `ArrowIPCStream` and lower-level
     `IPCStreamSink` batch serialization.
@@ -13,6 +13,11 @@
     modules while keeping the package-level public exports stable.
 - Added benchmark matrix artifacts and profiling workflows for comparing memory
     tuning options.
+
+## 0.1.3
+
+- Fixed documentation publishing workflow paths for the `http-to-arrow-v0.1.3`
+    release.
 
 ## Earlier history
 
