@@ -6,13 +6,16 @@ leaving the public class and subclass hook surface in ``http_to_arrow.main``.
 
 from __future__ import annotations
 
-from typing import Any, Iterable, Mapping
+from typing import TYPE_CHECKING, Any, Iterable, Mapping
 
 from http_to_arrow._coercion import coerce_inferred_value, coerce_value
 
+if TYPE_CHECKING:
+    from http_to_arrow.main import ArrowRecordContainer
+
 
 def resolve_field_key(
-    container: Any,
+    container: ArrowRecordContainer,
     field_name: str,
     record: Mapping[str, Any],
     lower_key_map: dict[str, str],
@@ -27,7 +30,9 @@ def resolve_field_key(
     return lower_key_map.get(field_name.lower())
 
 
-def handle_unknown_fields(container: Any, extras: dict[str, Any]) -> None:
+def handle_unknown_fields(
+    container: ArrowRecordContainer, extras: dict[str, Any]
+) -> None:
     """Apply the configured explicit-schema policy for extra keys."""
     if not extras:
         return
@@ -40,7 +45,9 @@ def handle_unknown_fields(container: Any, extras: dict[str, Any]) -> None:
         container.captured_extras.append(extras)
 
 
-def append_exact_key_record(container: Any, record: Mapping[str, Any]) -> bool:
+def append_exact_key_record(
+    container: ArrowRecordContainer, record: Mapping[str, Any]
+) -> bool:
     """Fast path for records that contain no keys outside the schema."""
     if any(key not in container._schema_field_names for key in record):
         return False
@@ -67,7 +74,9 @@ def append_exact_key_record(container: Any, record: Mapping[str, Any]) -> bool:
     return True
 
 
-def append_inferred_record(container: Any, record: Mapping[str, Any]) -> None:
+def append_inferred_record(
+    container: ArrowRecordContainer, record: Mapping[str, Any]
+) -> None:
     """Append a record while inferring and widening schema over time."""
     resolved_record = {
         container._canonicalize_inferred_key(key): value
@@ -99,7 +108,7 @@ def append_inferred_record(container: Any, record: Mapping[str, Any]) -> None:
         container.flush()
 
 
-def append(container: Any, record: Mapping[str, Any]) -> None:
+def append(container: ArrowRecordContainer, record: Mapping[str, Any]) -> None:
     """Append a single record to the container."""
     normalized_record = container._prepare_record(record)
     if not container._schema_explicit:
@@ -147,7 +156,9 @@ def append(container: Any, record: Mapping[str, Any]) -> None:
         container.flush()
 
 
-def extend(container: Any, records: Iterable[Mapping[str, Any]]) -> None:
+def extend(
+    container: ArrowRecordContainer, records: Iterable[Mapping[str, Any]]
+) -> None:
     """Append multiple records to the container."""
     for record in records:
         container.append(record)

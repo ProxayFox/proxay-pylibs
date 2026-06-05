@@ -8,7 +8,7 @@ instance to keep the public dataclass and compatibility methods in
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, cast
 
 import polars as pl
 import pyarrow as pa
@@ -16,8 +16,11 @@ import pyarrow as pa
 from http_to_arrow._coercion import coerce_inferred_value
 from http_to_arrow._encoding import maybe_dictionary_encode_array
 
+if TYPE_CHECKING:
+    from http_to_arrow.main import ArrowRecordContainer
 
-def flush(container: Any) -> None:
+
+def flush(container: ArrowRecordContainer) -> None:
     """Convert the current accumulator into a pending RecordBatch."""
     if container._current_count == 0:
         return
@@ -81,7 +84,9 @@ def flush(container: Any) -> None:
     container._init_accumulator()
 
 
-def _merge_pending_batches(container: Any, effective_schema: pa.Schema) -> pa.Table:
+def _merge_pending_batches(
+    container: ArrowRecordContainer, effective_schema: pa.Schema
+) -> pa.Table:
     """Merge pending batches into the cached table and clear batch state."""
     batch_table = pa.Table.from_batches(container.batches, schema=effective_schema)
     container.batches.clear()
@@ -94,10 +99,10 @@ def _merge_pending_batches(container: Any, effective_schema: pa.Schema) -> pa.Ta
     if container.compact_on_materialize:
         merged_table = merged_table.combine_chunks()
     container.table = merged_table
-    return container.table
+    return merged_table
 
 
-def to_table(container: Any) -> pa.Table:
+def to_table(container: ArrowRecordContainer) -> pa.Table:
     """Materialize pending records and batches into a cached Arrow table."""
     with container._lock:
         container.flush()
@@ -109,6 +114,7 @@ def to_table(container: Any) -> pa.Table:
 
         container._align_materialized_state_to_schema()
         effective_schema = container._effective_schema()
+        assert effective_schema is not None  # noqa: S101
 
         if not container.batches:
             if container.table is None:
@@ -118,7 +124,7 @@ def to_table(container: Any) -> pa.Table:
         return _merge_pending_batches(container, effective_schema)
 
 
-def incremental_flush(container: Any, threshold: int = 0) -> bool:
+def incremental_flush(container: ArrowRecordContainer, threshold: int = 0) -> bool:
     """Flush accumulated batches into the cached table when above *threshold*."""
     with container._lock:
         container.flush()
@@ -133,11 +139,12 @@ def incremental_flush(container: Any, threshold: int = 0) -> bool:
 
         container._align_materialized_state_to_schema()
         effective_schema = container._effective_schema()
+        assert effective_schema is not None  # noqa: S101
         _merge_pending_batches(container, effective_schema)
         return True
 
 
-def to_polars_frame(container: Any) -> pl.DataFrame:
+def to_polars_frame(container: ArrowRecordContainer) -> pl.DataFrame:
     """Materialize the container as a Polars DataFrame."""
     if (
         container.table is not None
@@ -149,7 +156,7 @@ def to_polars_frame(container: Any) -> pl.DataFrame:
     return cast(pl.DataFrame, pl.from_arrow(container.to_table()))
 
 
-def reset(container: Any) -> None:
+def reset(container: ArrowRecordContainer) -> None:
     """Clear accumulated data, batches, cached table, extras, and caches."""
     if not container._schema_explicit:
         container.schema = None
