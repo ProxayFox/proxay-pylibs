@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Iterator, Mapping
 
 import polars as pl
 import pyarrow as pa
@@ -77,7 +78,7 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
         self.dictionary_encode = dictionary_encode
         self.dictionary_cardinality_threshold = dictionary_cardinality_threshold
         self.compact_on_materialize = compact_on_materialize
-        self.batches = [] if batches is None else batches
+        self.batches = deque() if batches is None else deque(batches)
         self.captured_extras = []
         self._schema_fields = ()
         self._schema_field_names = frozenset()
@@ -88,7 +89,7 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
         self._current_count = 0
         self._pending_batch_rows = 0
         self._materialized_schema = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.__post_init__()
 
     def __post_init__(self) -> None:
@@ -303,10 +304,10 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
             self.table = self._align_table_to_schema(self.table, effective_schema)
 
         if any(not batch.schema.equals(effective_schema) for batch in self.batches):
-            self.batches = [
+            self.batches = deque(
                 self._align_batch_to_schema(batch, effective_schema)
                 for batch in self.batches
-            ]
+            )
 
     # ----------------------------------------------------------------- appending
 
@@ -369,6 +370,56 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
         Returns ``True`` when batches were actually flushed, ``False`` otherwise.
         """
         return _materialization.incremental_flush(self, threshold)
+
+    # --- streaming batch access ---
+
+    def drain_batches(self) -> list[pa.RecordBatch]:
+        """Return completed pending batches and remove them from the container.
+
+        This releases ownership of every flushed ``RecordBatch`` without
+        touching the in-flight accumulator or the cached table. After draining,
+        :attr:`batch_total_rows` reflects only the rows still held in the
+        accumulator.
+
+        Returns an empty list when no batches are pending.
+        """
+        with self._lock:
+            batches = self.batches
+            self.batches = deque()
+            self._pending_batch_rows = 0
+        return list(batches)
+
+    def flush_partial(self) -> pa.RecordBatch | None:
+        """Flush the in-flight accumulator and return the resulting batch.
+
+        Unlike :meth:`flush`, this returns the newly created ``RecordBatch`` and
+        removes it from the pending batch list so a later :meth:`to_table` call
+        does not materialize it a second time. Returns ``None`` when the
+        accumulator holds no rows.
+        """
+        with self._lock:
+            if self._current_count == 0:
+                return None
+            self.flush()
+            batch = self.batches.pop()
+            self._pending_batch_rows -= batch.num_rows
+        return batch
+
+    def iter_batches(self) -> Iterator[pa.RecordBatch]:
+        """Yield completed batches one at a time, releasing each as it is yielded.
+
+        Batches are yielded in FIFO order and removed from the container as they
+        are produced, so memory is not retained for already-yielded batches. The
+        in-flight accumulator is left untouched; call :meth:`flush_partial`
+        first to emit a trailing short batch.
+        """
+        while True:
+            with self._lock:
+                if not self.batches:
+                    break
+                batch = self.batches.popleft()
+                self._pending_batch_rows -= batch.num_rows
+            yield batch
 
     def to_polars_frame(self) -> pl.DataFrame:
         """Materialize the container as a Polars DataFrame."""

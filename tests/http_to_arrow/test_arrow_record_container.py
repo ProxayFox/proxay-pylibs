@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import inspect
+from collections import deque
 from datetime import datetime
 from typing import Any, Mapping, cast, get_args
 
@@ -367,7 +368,7 @@ def test_inferred_alignment_helpers_cover_cast_and_realignment_paths() -> None:
     container.schema = target_schema
     container._refresh_schema_cache()
     container.table = source_table
-    container.batches = [source_batch]
+    container.batches = deque([source_batch])
     container._align_materialized_state_to_schema()
 
     assert container.table is not None
@@ -642,7 +643,7 @@ def test_reset_and_clear_alias_remove_all_accumulated_state() -> None:
     assert container.clear() is None
 
     assert container.table is None
-    assert container.batches == []
+    assert not container.batches
     assert container.captured_extras == []
     assert container.batch_total_rows == 0
     assert container.total_rows == 0

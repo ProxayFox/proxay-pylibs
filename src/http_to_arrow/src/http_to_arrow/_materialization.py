@@ -88,7 +88,9 @@ def _merge_pending_batches(
     container: ArrowRecordContainer, effective_schema: pa.Schema
 ) -> pa.Table:
     """Merge pending batches into the cached table and clear batch state."""
-    batch_table = pa.Table.from_batches(container.batches, schema=effective_schema)
+    batch_table = pa.Table.from_batches(
+        list(container.batches), schema=effective_schema
+    )
     container.batches.clear()
     container._pending_batch_rows = 0
     if container.table is not None:

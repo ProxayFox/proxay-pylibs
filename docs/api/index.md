@@ -3,6 +3,8 @@
 The stable public API is intentionally small:
 
 - `http_to_arrow.ArrowRecordContainer`
+- `http_to_arrow.ArrowIPCStream`
+- `http_to_arrow.IPCStreamSink`
 - `http_to_arrow.UnknownFieldPolicy`
 - `http_to_arrow.MissingFieldPolicy`
 - `http_to_arrow.CoercionPolicy`
@@ -14,7 +16,8 @@ exports and `ArrowRecordContainer` methods.
 
 !!! note "Resolved API targets"
     The generated API pages target real modules in the current package:
-    `http_to_arrow`, `http_to_arrow.main`, `http_to_arrow._policies`,
+    `http_to_arrow`, `http_to_arrow.main`, `http_to_arrow.streaming`,
+    `http_to_arrow._ipc`, `http_to_arrow._drain`, `http_to_arrow._policies`,
     `http_to_arrow._coercion`, `http_to_arrow._schema`, and
     `http_to_arrow._encoding`.
 
@@ -27,6 +30,7 @@ exports and `ArrowRecordContainer` methods.
 
 - [Package Exports](package.md)
 - [Container](container.md)
+- [Streaming](streaming.md)
 - [Policies](policies.md)
 - [Coercion Helpers](coercion.md)
 - [Schema Helpers](schema.md)

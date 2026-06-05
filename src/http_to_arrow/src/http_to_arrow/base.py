@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from collections import deque
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -109,12 +110,14 @@ class BaseArrowRecordContainer:
             "this schema is used for subsequent batches to ensure type compatibility."
         ),
     )
-    _lock: threading.Lock = field(
-        default_factory=threading.Lock,
+    _lock: threading.RLock = field(
+        default_factory=threading.RLock,
         doc=(
-            "Thread lock used by materialization paths that flush and merge pending "
-            "batches. Direct appends and direct flush() calls are not synchronized and "
-            "should be externally coordinated in multithreaded contexts."
+            "Reentrant thread lock used by materialization paths that flush and merge "
+            "pending batches. Reentrancy lets a lock-holding method (for example "
+            "flush_partial()) call other helpers that may also acquire the lock without "
+            "deadlocking. Direct appends and direct flush() calls are not synchronized "
+            "and should be externally coordinated in multithreaded contexts."
         ),
     )
 
@@ -174,9 +177,9 @@ class ArrowRecordContainerSettings:
             "the cached table to reduce chunk fragmentation across flushes."
         ),
     )
-    batches: list[pa.RecordBatch] = field(
-        default_factory=list,
-        doc="List of record batches pending materialization into the cached table.",
+    batches: deque[pa.RecordBatch] = field(
+        default_factory=deque,
+        doc="Deque of record batches pending materialization into the cached table.",
     )
 
 
