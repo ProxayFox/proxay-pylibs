@@ -12,6 +12,8 @@ the monorepo root can still host shared integration tests when needed.
 ## Included exports
 
 - `ArrowRecordContainer`
+- `ArrowIPCStream`
+- `IPCStreamSink`
 - `UnknownFieldPolicy`
 - `MissingFieldPolicy`
 - `CoercionPolicy`
@@ -82,6 +84,51 @@ knobs to bound peak memory. All defaults preserve the historical behavior.
   `128_000`) reduces the size of the Python accumulator held between
   flushes at the cost of more frequent batch construction.
 
-The helper modules `_policies`, `_coercion`, `_schema`, and `_encoding` are
-private implementation details; the public surface remains
-`ArrowRecordContainer` plus the three policy aliases.
+## Streaming IPC
+
+For memory-constrained runtimes (for example a 2 GiB Azure Function exporting
+millions of rows) you can stream completed batches out as Arrow IPC stream bytes
+instead of materializing one large table. `ArrowIPCStream` runs an async
+producer (such as HTTP pagination) and a consumer that serializes each completed
+`RecordBatch` to Arrow IPC bytes and releases it immediately, so peak memory
+stays close to a single batch. A bounded `asyncio.Queue` applies backpressure so
+the producer never outruns serialization.
+
+Streaming requires an explicit schema because the IPC stream header is written
+before any rows arrive. Inferred-schema mode and `dictionary_encode=True` are
+rejected for streaming.
+
+```python
+import pyarrow as pa
+
+from http_to_arrow import ArrowIPCStream
+
+schema = pa.schema([pa.field("id", pa.int64()), pa.field("name", pa.string())])
+
+async def stream_rows():
+    stream = ArrowIPCStream(schema=schema, batch_size=128_000, compression="zstd")
+
+    async def produce() -> None:
+        async for page in fetch_pages():  # your async paginator
+            await stream.extend(page)
+
+    async for chunk in stream.ipc_chunks(producer=produce):
+        yield chunk  # forward each chunk to the streaming HTTP response
+```
+
+Consume the stream on the client with `pyarrow.ipc.open_stream`:
+
+```python
+import pyarrow as pa
+
+reader = pa.ipc.open_stream(pa.BufferReader(response_bytes))
+table = reader.read_all()
+```
+
+For advanced composition, `IPCStreamSink` exposes the per-batch IPC
+serialization directly without the async orchestration.
+
+The helper modules `_policies`, `_coercion`, `_schema`, `_encoding`, `_drain`,
+and `_ipc` are private implementation details. The public surface is
+`ArrowRecordContainer`, `ArrowIPCStream`, `IPCStreamSink`, and the three policy
+aliases.
