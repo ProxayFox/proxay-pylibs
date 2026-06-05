@@ -145,6 +145,12 @@ class ArrowIPCStream:
                     if chunk:
                         yield chunk
 
+                # Cooperative yield. On the accumulation-only path (a page
+                # smaller than the remaining batch_size completes no batch and
+                # emits no chunk) a non-empty ``queue.get()`` never suspends, so
+                # this is the only point that returns control to the event loop
+                # and keeps the producer task from being starved. Benchmarked as
+                # effectively free at realistic page sizes.
                 await asyncio.sleep(0)
 
             final_batch = container.flush_partial()

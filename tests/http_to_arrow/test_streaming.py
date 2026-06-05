@@ -82,6 +82,59 @@ def test_extend_applies_backpressure_when_queue_is_full() -> None:
 
 
 @pytest.mark.unit
+def test_consumer_yields_control_while_accumulating() -> None:
+    # On the accumulation-only path (pages smaller than batch_size complete no
+    # batch and emit no chunk), ``await asyncio.sleep(0)`` is the consumer's
+    # only cooperative yield point because a non-empty ``queue.get()`` does not
+    # suspend. This locks in that a concurrent task keeps making progress while
+    # the consumer accumulates; without the yield the observer would be starved
+    # (advance ~0) until the whole pre-filled queue drains in one pass.
+    schema = pa.schema([pa.field("id", pa.int64())])
+    pages = 64
+
+    async def scenario() -> int:
+        # batch_size far above the row count keeps every queue item on the
+        # accumulation-only path so no chunk is emitted until the sentinel.
+        stream = ArrowIPCStream(
+            schema=schema, batch_size=1_000_000, queue_maxsize=pages + 1
+        )
+        for value in range(pages):
+            await stream.extend([{"id": value}])
+        await stream.end()
+
+        observed = 0
+
+        async def observer() -> None:
+            nonlocal observed
+            while True:
+                observed += 1
+                await asyncio.sleep(0)
+
+        observer_task = asyncio.create_task(observer())
+        await asyncio.sleep(0)  # let the observer reach its first await
+        baseline = observed
+
+        chunks = [chunk async for chunk in stream.ipc_chunks()]
+
+        observer_task.cancel()
+        try:
+            await observer_task
+        except asyncio.CancelledError:
+            pass
+
+        # The stream stays valid and carries every accumulated row.
+        table = _read_table(b"".join(chunks))
+        assert table.num_rows == pages
+
+        return observed - baseline
+
+    advanced = asyncio.run(scenario())
+    # With the cooperative yield the observer runs about once per accumulated
+    # page; without it this count would collapse toward zero.
+    assert advanced >= pages // 2
+
+
+@pytest.mark.unit
 def test_empty_stream_is_valid() -> None:
     schema = pa.schema([pa.field("id", pa.int64())])
 
