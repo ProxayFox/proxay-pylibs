@@ -18,9 +18,11 @@ The current workspace package lives in `src/http_to_arrow` and provides
 Arrow-backed ingestion containers.
 
 - `ArrowRecordContainer`
-- `UnknownFieldPolicy`
-- `MissingFieldPolicy`
+- `ArrowIPCStream`
+- `IPCStreamSink`
 - `CoercionPolicy`
+- `MissingFieldPolicy`
+- `UnknownFieldPolicy`
 
 ### `log-generator`
 
@@ -34,6 +36,9 @@ intended for synthetic log generation from reusable, format-driven templates.
 ## Repository layout
 
 - `pyproject.toml` - shared workspace and test configuration
+- `docs/` - MkDocs source for the current documentation site
+- `scripts/` - manual profiling and benchmark utilities
+- `benchmarks/` - checked-in benchmark comparison artifacts
 - `src/` - workspace members, one package per subdirectory
 - `templates/` - starter templates for new workspace members
 - `tests/` - shared integration or multi-package tests when needed
@@ -51,7 +56,7 @@ New packages should follow this layout:
 - `src/<member>/tests/test_*.py`
 
 This keeps implementation code out of the package project root while still using
-the standard Python `src` layout that tools like Hatch, pytest, and Pylance
+the standard Python `src` layout that packaging tools, pytest, and Pylance
 handle well.
 
 ## Starter template
@@ -71,7 +76,7 @@ The starter includes:
 ## Quick start
 
 1. Sync the shared development environment with
-   `uv sync --all-packages --extra dev`.
+   `uv sync --all-packages --group dev`.
 2. Run tests with `uv run pytest`.
 3. Review the default terminal coverage summary emitted by pytest-cov.
 4. Add new packages under `src/<package_name>/` using the standard package
@@ -79,8 +84,8 @@ The starter includes:
 
 ## Documentation
 
-The MkDocs site for `http-to-arrow` lives under `docs/`, with configuration in
-`mkdocs.yml`.
+The main MkDocs site lives under `docs/`, with configuration in `mkdocs.yml`.
+It currently covers `http-to-arrow`.
 
 Install documentation dependencies with:
 
@@ -100,11 +105,16 @@ Build the site in strict mode:
 just docs-build
 ```
 
+Manual profiling and benchmark utilities are documented in
+[scripts/README.md](scripts/README.md). The checked-in `http-to-arrow`
+comparison matrix lives in
+[benchmarks/http_to_arrow/COMPARISON_MATRIX.md](benchmarks/http_to_arrow/COMPARISON_MATRIX.md).
+
 ## Testing and coverage
 
 - The shared pytest configuration lives in the repository root `pyproject.toml`.
 - `uv run pytest` includes coverage by default for the current `http_to_arrow`
-   package while the workspace is still small and focused.
+   package even though the workspace now contains multiple package members.
 - Coverage is reported with branch tracking and a terminal summary of missing
    lines, so contributors can see gaps without extra flags.
 - The current default coverage gate is set to 90% for the package under test;

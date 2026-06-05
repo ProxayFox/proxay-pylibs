@@ -44,6 +44,7 @@ nav:
   - Examples: examples.md
   - Schema Inference: schema-inference.md
   - Memory Tuning: memory-tuning.md
+  - Performance And Profiling: performance-and-profiling.md
   - Streaming IPC: streaming-ipc.md
   - Errors And Policies: errors-and-policies.md
   - API Reference:

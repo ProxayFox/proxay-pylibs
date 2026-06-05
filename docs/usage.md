@@ -72,6 +72,59 @@ assert container.total_rows == 3
 `incremental_flush(threshold=N)` returns `True` only when pending batch rows are
 greater than `N`.
 
+## Drain completed batches
+
+Use the batch-draining helpers when a consumer can process Arrow
+`RecordBatch` objects directly and should not retain every completed batch in
+the container.
+
+```python
+import pyarrow as pa
+
+from http_to_arrow import ArrowRecordContainer
+
+container = ArrowRecordContainer(
+        schema=pa.schema([pa.field("id", pa.int64())]),
+        batch_size=2,
+)
+
+container.extend([{"id": 1}, {"id": 2}, {"id": 3}])
+
+batches = list(container.iter_batches())
+assert [batch.column("id").to_pylist() for batch in batches] == [[1, 2]]
+assert container.batch_total_rows == 1
+
+trailing_batch = container.flush_partial()
+assert trailing_batch is not None
+assert trailing_batch.column("id").to_pylist() == [3]
+assert container.batch_total_rows == 0
+```
+
+`iter_batches()` yields completed batches in FIFO order and removes each batch
+from the container as it is yielded. It does not flush the in-flight
+accumulator, so call `flush_partial()` when you need to emit a trailing short
+batch.
+
+`drain_batches()` is the list-returning form for completed pending batches. It
+does not flush the accumulator or touch the cached table.
+
+Returned or drained batches are no longer owned by the container. A later
+`to_table()` call will not materialize them again.
+
+## Inspect container state
+
+Use `batch_total_rows` and `total_rows` to understand where rows currently live.
+
+- `batch_total_rows` counts rows in completed pending batches plus rows still
+    in the in-flight accumulator.
+- `total_rows` counts the cached materialized table, completed pending batches,
+    and the in-flight accumulator.
+
+`incremental_flush()` can move pending batches into the cached table, which
+reduces `batch_total_rows` while preserving `total_rows`. `iter_batches()`,
+`drain_batches()`, and `flush_partial()` transfer batch ownership to the caller,
+so those returned rows no longer contribute to either count.
+
 ## Reset state
 
 ```python

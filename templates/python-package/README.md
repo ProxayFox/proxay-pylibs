@@ -17,7 +17,7 @@ workspace package by accident.
 2. Copy the template files into that member.
 3. Rename `package_name` to your real import package name.
 4. Replace all `{{ ... }}` placeholders.
-5. Run `uv sync --all-packages --extra dev`.
+5. Run `uv sync --all-packages --group dev`.
 6. Run `uv run pytest`.
 
 ## Placeholder meanings

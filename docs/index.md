@@ -16,6 +16,7 @@ PyArrow table or Polars data frame.
 - Inferred schemas that widen as new fields or compatible types appear.
 - Field policies for unknown fields, missing fields, coercion, and key casing.
 - Batch flushing and incremental materialization for high-volume streams.
+- Async Arrow IPC streaming for memory-constrained producers and consumers.
 - Optional memory controls for dictionary encoding, chunk compaction, and eager
   accumulator cleanup.
 - Conversion helpers for PyArrow and Polars consumers.
@@ -76,6 +77,9 @@ Expected output:
   inferred schema examples.
 - [Usage](usage.md) covers the common ingestion and materialization workflows.
 - [Configuration](configuration.md) documents constructor options and defaults.
+- [Streaming IPC](streaming-ipc.md) explains async Arrow IPC chunk streaming.
+- [Performance And Profiling](performance-and-profiling.md) covers profiling
+  scripts and benchmark matrix artifacts.
 - [API Reference](api/index.md) contains generated reference pages from the
   current Python modules.
 - [Development](development.md) explains the repository workflow for
@@ -83,10 +87,9 @@ Expected output:
 
 ## Status
 
-The current package version is `0.1.2` and requires Python `>=3.14`. The public
-library surface is intentionally small: `ArrowRecordContainer` plus the policy
-aliases exported by `http_to_arrow`.
+The current package version is `0.1.3` and requires Python `>=3.14`. The public
+library surface is intentionally small: `ArrowRecordContainer`,
+`ArrowIPCStream`, `IPCStreamSink`, and the policy aliases exported by
+`http_to_arrow`.
 
-!!! warning "Release history"
-    A maintained changelog has not been added yet. See [Changelog](changelog.md)
-    for the current release-history note.
+See [Changelog](changelog.md) for the current release notes.

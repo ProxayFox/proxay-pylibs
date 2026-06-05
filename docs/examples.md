@@ -135,6 +135,28 @@ frame = container.to_polars_frame()
 assert frame.to_dict(as_series=False) == {"id": [5]}
 ```
 
+## Stream completed batches
+
+```python
+import pyarrow as pa
+
+from http_to_arrow import ArrowRecordContainer
+
+container = ArrowRecordContainer(
+    schema=pa.schema([pa.field("id", pa.int64())]),
+    batch_size=2,
+)
+
+container.extend([{"id": 1}, {"id": 2}, {"id": 3}])
+
+for batch in container.iter_batches():
+    send_batch(batch)
+
+trailing = container.flush_partial()
+if trailing is not None:
+    send_batch(trailing)
+```
+
 ## Custom record normalizer
 
 ```python

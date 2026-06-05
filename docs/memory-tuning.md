@@ -113,7 +113,8 @@ in-flight rows.
 ## Profiling utilities
 
 Manual profiling scripts live under `scripts/` and are not part of the package
-distribution. For a smoke run:
+distribution. See [Performance And Profiling](performance-and-profiling.md) for
+the full workflow. For a smoke run:
 
 ```bash
 uv run --group profiling python scripts/profile_http_to_arrow.py \

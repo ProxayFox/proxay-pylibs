@@ -4,10 +4,10 @@
 ingestion workflows.
 
 The package uses a standard source layout so code lives under
-`src/http_to_arrow/` rather than the project root.
+`src/http_to_arrow/src/http_to_arrow/` rather than the project root.
 
-Package-specific tests live under `tests/` inside this workspace member, while
-the monorepo root can still host shared integration tests when needed.
+Package-specific tests currently live under `tests/http_to_arrow/` at the
+monorepo root.
 
 ## Included exports
 
@@ -58,6 +58,29 @@ assert table.to_pydict() == {
 - Inferred mode widens as new fields appear and backfills older rows with nulls.
 - Conflicting inferred field types widen when possible and otherwise fall back to `string`.
 - `to_table()` raises when inferred mode has neither an explicit schema nor any appended records.
+
+## Materialization outputs
+
+Use `to_table()` to materialize pending rows and batches as a cached PyArrow
+table. `to_arrow()` is a compatibility alias for the same table path.
+
+Use `to_polars_frame()` to materialize the same data as a Polars DataFrame.
+`to_polars()` is a compatibility alias.
+
+## Batch access for streaming
+
+Long-running streaming consumers can release completed batches without building
+one large table:
+
+- `drain_batches()` returns completed pending `RecordBatch` objects and clears
+  them from the container.
+- `iter_batches()` yields completed batches in FIFO order and releases each one
+  as it is yielded.
+- `flush_partial()` emits a trailing short batch from the in-flight accumulator
+  and removes it from pending state so it is not materialized again later.
+
+These helpers underpin `ArrowIPCStream`, which serializes completed batches to
+Arrow IPC bytes while keeping peak memory close to the active batch.
 
 ## Memory tuning
 
@@ -128,7 +151,7 @@ table = reader.read_all()
 For advanced composition, `IPCStreamSink` exposes the per-batch IPC
 serialization directly without the async orchestration.
 
-The helper modules `_policies`, `_coercion`, `_schema`, `_encoding`, `_drain`,
-and `_ipc` are private implementation details. The public surface is
+The helper modules under `http_to_arrow` are private implementation details,
+including underscored modules and shared base classes. The public surface is
 `ArrowRecordContainer`, `ArrowIPCStream`, `IPCStreamSink`, and the three policy
-aliases.
+aliases exported from `http_to_arrow`.

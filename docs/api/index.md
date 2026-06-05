@@ -14,12 +14,12 @@ for maintainers and advanced readers because this site was generated with a
 comprehensive module reference, but callers should prefer the package-level
 exports and `ArrowRecordContainer` methods.
 
-!!! note "Resolved API targets"
-    The generated API pages target real modules in the current package:
-    `http_to_arrow`, `http_to_arrow.main`, `http_to_arrow.streaming`,
-    `http_to_arrow._ipc`, `http_to_arrow._drain`, `http_to_arrow._policies`,
-    `http_to_arrow._coercion`, `http_to_arrow._schema`, and
-    `http_to_arrow._encoding`.
+!!! note "Reference coverage"
+    The generated API pages cover the package exports, container, streaming
+    helpers, policies, coercion helpers, schema helpers, and encoding helpers.
+    Internal helper modules may move as the implementation is split or merged;
+    callers should treat the package exports and documented class methods as the
+    supported integration surface.
 
 !!! warning "Internal helper modules"
     Modules whose names begin with `_` are lower-stability implementation
