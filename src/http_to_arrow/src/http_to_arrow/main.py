@@ -88,7 +88,7 @@ class ArrowRecordContainer(BaseArrowRecordContainer, ArrowRecordContainerSetting
         self._current_count = 0
         self._pending_batch_rows = 0
         self._materialized_schema = None
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
         self.__post_init__()
 
     def __post_init__(self) -> None:

@@ -109,12 +109,14 @@ class BaseArrowRecordContainer:
             "this schema is used for subsequent batches to ensure type compatibility."
         ),
     )
-    _lock: threading.Lock = field(
-        default_factory=threading.Lock,
+    _lock: threading.RLock = field(
+        default_factory=threading.RLock,
         doc=(
-            "Thread lock used by materialization paths that flush and merge pending "
-            "batches. Direct appends and direct flush() calls are not synchronized and "
-            "should be externally coordinated in multithreaded contexts."
+            "Reentrant thread lock used by materialization paths that flush and merge "
+            "pending batches. Reentrancy lets a lock-holding method (for example "
+            "flush_partial()) call other helpers that may also acquire the lock without "
+            "deadlocking. Direct appends and direct flush() calls are not synchronized "
+            "and should be externally coordinated in multithreaded contexts."
         ),
     )
 

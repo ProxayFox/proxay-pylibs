@@ -144,3 +144,20 @@ def test_to_table_still_materializes_without_using_drain_helpers() -> None:
     assert table.num_rows == 3
     assert table.column("id").to_pylist() == [1, 2, 3]
     assert table.column("name").to_pylist() == ["alpha", "beta", "gamma"]
+
+
+@pytest.mark.unit
+def test_container_lock_is_reentrant() -> None:
+    container = ArrowRecordContainer(schema=pa.schema([pa.field("id", pa.int64())]))
+
+    # The container lock must be reentrant so a method that already holds it (for
+    # example flush_partial) can call helpers that also acquire it without
+    # deadlocking. A reentrant lock grants a same-thread re-acquire immediately;
+    # a plain threading.Lock would block and time out here.
+    with container._lock:
+        reacquired = container._lock.acquire(timeout=0.5)
+        try:
+            assert reacquired is True
+        finally:
+            if reacquired:
+                container._lock.release()
